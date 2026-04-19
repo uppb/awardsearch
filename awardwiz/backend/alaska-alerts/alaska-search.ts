@@ -21,7 +21,10 @@ export const memoizeAlaskaSearch = (search: AlaskaSearch): AlaskaSearch => {
     if (cached)
       return cached
 
-    const result = search(query)
+    const result = search(query).catch((error) => {
+      cache.delete(key)
+      throw error
+    })
     cache.set(key, result)
     return result
   }

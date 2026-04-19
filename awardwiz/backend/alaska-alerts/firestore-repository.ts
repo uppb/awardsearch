@@ -56,24 +56,20 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
         })
       }
 
+      const staleProcessingQuery = collection
+        .where("status", "==", "processing")
+        .where("claimedAt", "<=", staleBefore)
+        .limit(limit)
+      const staleSnapshot = await transaction.get(staleProcessingQuery)
+      const staleDocs = staleSnapshot.docs.slice(0, limit)
+
       const pendingQuery = collection
         .where("status", "==", "pending")
-        .limit(limit)
+        .limit(Math.max(0, limit - staleDocs.length))
       const pendingSnapshot = await transaction.get(pendingQuery)
-      const pendingDocs = pendingSnapshot.docs.slice(0, limit)
+      const pendingDocs = pendingSnapshot.docs.slice(0, Math.max(0, limit - staleDocs.length))
 
-      const remaining = limit - pendingDocs.length
-      let staleDocs: typeof pendingSnapshot.docs = []
-      if (remaining > 0) {
-        const staleProcessingQuery = collection
-          .where("status", "==", "processing")
-          .where("claimedAt", "<=", staleBefore)
-          .limit(remaining)
-        const staleSnapshot = await transaction.get(staleProcessingQuery)
-        staleDocs = staleSnapshot.docs.slice(0, remaining)
-      }
-
-      const claimedEvents = [...pendingDocs, ...staleDocs].map((doc) => {
+      const claimedEvents = [...staleDocs, ...pendingDocs].map((doc) => {
         const claimToken = randomUUID()
         transaction.update(doc.ref, {
           status: "processing",

@@ -54,4 +54,17 @@ describe("memoizeAlaskaSearch", () => {
 
     expect(search).toHaveBeenCalledTimes(3)
   })
+
+  it("evicts a failed in-flight query so a later retry can call the scraper again", async () => {
+    const search = vi.fn<[AlaskaSearchQuery], Promise<FlightWithFares[]>>()
+      .mockRejectedValueOnce(new Error("alaska 500"))
+      .mockResolvedValueOnce(flights)
+    const memoizedSearch = memoizeAlaskaSearch(search)
+    const query = { origin: "SFO", destination: "HNL", departureDate: "2026-07-01" }
+
+    await expect(memoizedSearch(query)).rejects.toThrow("alaska 500")
+    await expect(memoizedSearch(query)).resolves.toEqual(flights)
+
+    expect(search).toHaveBeenCalledTimes(2)
+  })
 })

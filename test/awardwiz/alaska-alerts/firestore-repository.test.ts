@@ -278,6 +278,45 @@ describe("FirestoreAlaskaAlertsRepository", () => {
     expect(staleAfterCleanup.data()).not.toHaveProperty("claimToken")
   })
 
+  it("reclaims stale processing events even when pending events fill the limit", async () => {
+    const repository = new FirestoreAlaskaAlertsRepository()
+    const staleProcessing = buildEvent({
+      id: "processing-1",
+      status: "processing",
+      claimedAt: "2026-04-18T05:30:00.000Z",
+      claimToken: "claim-old",
+    })
+
+    await fakeFirestore.collection("notification_events").doc(staleProcessing.id).set(staleProcessing as unknown as StoredDoc)
+    await fakeFirestore.collection("notification_events").doc("pending-1").set(buildEvent({
+      id: "pending-1",
+      status: "pending",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("notification_events").doc("pending-2").set(buildEvent({
+      id: "pending-2",
+      status: "pending",
+    }) as unknown as StoredDoc)
+
+    const claimed = await repository.claimPendingNotificationEvents(
+      2,
+      "2026-04-18T06:00:00.000Z",
+      "2026-04-18T05:45:00.000Z",
+    )
+
+    expect(claimed.map((event) => event.id)).toContain("processing-1")
+
+    const processingAfterClaim = await fakeFirestore.collection("notification_events").doc("processing-1").get()
+    expect(processingAfterClaim.data()).toEqual(expect.objectContaining({
+      id: "processing-1",
+      status: "processing",
+      claimedAt: "2026-04-18T06:00:00.000Z",
+    }))
+    expect(processingAfterClaim.data()).toHaveProperty("claimToken")
+    expect(processingAfterClaim.data()).not.toEqual(expect.objectContaining({
+      claimToken: "claim-old",
+    }))
+  })
+
   it("stores nextCheckAt when persisting an alert evaluation", async () => {
     const repository = new FirestoreAlaskaAlertsRepository()
     const alert = buildAlert({
