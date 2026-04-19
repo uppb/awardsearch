@@ -382,6 +382,99 @@ describe("evaluateOneAlert", () => {
     }))
   })
 
+  it("preserves a prior positive match when some dates fail and successful dates show no current match", async () => {
+    const rangeAlert: AlaskaAlert = {
+      ...alert,
+      dateMode: "date_range",
+      date: undefined,
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+    }
+    const priorState: AlaskaAlertState = {
+      alertId: "alert-1",
+      hasMatch: true,
+      matchedDates: ["2026-06-30"],
+      matchingResults: [{
+        date: "2026-06-30",
+        flightNo: "AS 840",
+        origin: "SFO",
+        destination: "HNL",
+        departureDateTime: "2026-06-30 19:42",
+        arrivalDateTime: "2026-06-30 22:11",
+        cabin: "business",
+        miles: 81000,
+        cash: 6.1,
+        currencyOfCash: "USD",
+        bookingClass: "D",
+        segmentCount: 1,
+      }],
+      bestMatchSummary: {
+        date: "2026-06-30",
+        flightNo: "AS 840",
+        origin: "SFO",
+        destination: "HNL",
+        departureDateTime: "2026-06-30 19:42",
+        arrivalDateTime: "2026-06-30 22:11",
+        cabin: "business",
+        miles: 81000,
+        cash: 6.1,
+        currencyOfCash: "USD",
+        bookingClass: "D",
+        segmentCount: 1,
+      },
+      matchFingerprint: "fp-previous",
+      lastMatchAt: "2026-04-18T05:00:00.000Z",
+      lastNotifiedAt: "2026-04-18T05:30:00.000Z",
+      lastErrorAt: undefined,
+      lastErrorMessage: undefined,
+      updatedAt: "2026-04-18T05:30:00.000Z",
+    }
+    const repo = {
+      getState: vi.fn<[], Promise<AlaskaAlertState | undefined>>().mockResolvedValue(priorState),
+      saveEvaluation: vi.fn().mockResolvedValue(undefined),
+      createNotificationEvent: vi.fn().mockResolvedValue(undefined),
+    }
+    const search = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("alaska 500"))
+
+    await evaluateOneAlert({
+      alert: rangeAlert,
+      repository: repo,
+      searchAlaska: search,
+      now: new Date("2026-04-18T06:00:00.000Z"),
+    })
+
+    expect(repo.createNotificationEvent).not.toHaveBeenCalled()
+    expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        hasMatch: true,
+        matchedDates: ["2026-06-30"],
+        matchingResults: expect.arrayContaining([expect.objectContaining({
+          date: "2026-06-30",
+          flightNo: "AS 840",
+        })]),
+        bestMatchSummary: expect.objectContaining({
+          date: "2026-06-30",
+          flightNo: "AS 840",
+        }),
+        matchFingerprint: "fp-previous",
+        lastMatchAt: "2026-04-18T05:00:00.000Z",
+        lastNotifiedAt: "2026-04-18T05:30:00.000Z",
+        lastErrorAt: "2026-04-18T06:00:00.000Z",
+        lastErrorMessage: "alaska 500",
+      }),
+      run: expect.objectContaining({
+        scrapeCount: 2,
+        scrapeSuccessCount: 1,
+        scrapeErrorCount: 1,
+        matchedResultCount: 0,
+        hasMatch: false,
+        errorSummary: "alaska 500",
+      }),
+    }))
+  })
+
   it("preserves the last successful match state when every date scrape fails", async () => {
     const rangeAlert: AlaskaAlert = {
       ...alert,

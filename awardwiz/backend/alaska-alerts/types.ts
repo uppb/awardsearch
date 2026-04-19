@@ -84,6 +84,7 @@ export type NotificationEvent = {
   status: "pending" | "processing" | "attempting" | "delivered_unconfirmed" | "sent" | "failed"
   claimedAt?: string
   claimToken?: string
+  attemptedAt?: string
   payload: {
     origin: string
     destination: string

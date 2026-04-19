@@ -25,12 +25,34 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
   }
 
   async createNotificationEvent(event: NotificationEvent) {
-    await firestore().collection("notification_events").doc(event.id).set(event)
+    const docRef = firestore().collection("notification_events").doc(event.id)
+    await firestore().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(docRef)
+      if (snapshot.exists)
+        return
+
+      transaction.set(docRef, event)
+    })
   }
 
   async claimPendingNotificationEvents(limit: number, claimedAt: string, staleBefore: string): Promise<NotificationEvent[]> {
     return firestore().runTransaction(async (transaction) => {
       const collection = firestore().collection("notification_events")
+      const staleAttemptingQuery = collection
+        .where("status", "==", "attempting")
+        .where("claimedAt", "<=", staleBefore)
+        .limit(limit)
+      const staleAttemptingSnapshot = await transaction.get(staleAttemptingQuery)
+      for (const doc of staleAttemptingSnapshot.docs) {
+        transaction.update(doc.ref, {
+          status: "delivered_unconfirmed",
+          sentAt: admin.firestore.FieldValue.delete(),
+          claimedAt: admin.firestore.FieldValue.delete(),
+          claimToken: admin.firestore.FieldValue.delete(),
+          attemptedAt: admin.firestore.FieldValue.delete(),
+          failureReason: `At-most-once: stale attempting event was finalized without retry after worker interruption (claimed before ${staleBefore}).`,
+        })
+      }
 
       const pendingQuery = collection
         .where("status", "==", "pending")
@@ -81,6 +103,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
 
       transaction.update(docRef, {
         status: "attempting",
+        attemptedAt,
       })
     })
   }
@@ -91,6 +114,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       sentAt: admin.firestore.FieldValue.delete(),
       claimedAt: admin.firestore.FieldValue.delete(),
       claimToken: admin.firestore.FieldValue.delete(),
+      attemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }
@@ -101,6 +125,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       sentAt,
       claimedAt: admin.firestore.FieldValue.delete(),
       claimToken: admin.firestore.FieldValue.delete(),
+      attemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: admin.firestore.FieldValue.delete(),
     })
   }
@@ -110,6 +135,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "failed",
       claimedAt: admin.firestore.FieldValue.delete(),
       claimToken: admin.firestore.FieldValue.delete(),
+      attemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }

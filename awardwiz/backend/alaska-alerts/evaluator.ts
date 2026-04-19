@@ -52,16 +52,16 @@ export const evaluateOneAlert = async ({ alert, repository, searchAlaska, now }:
   const createNotification = matchEvaluation.hasMatch && (!priorState?.hasMatch || shouldNotifyAgain(alert, priorState, now))
   const bestMatchSummary = matchEvaluation.bestMatchSummary
   const bookingDate = bestMatchSummary?.date ?? matchEvaluation.matchedDates[0]!
-  const allScrapesFailed = scrapeErrors.length > 0 && scrapeErrors.length === searchedDates.length
+  const preservePriorMatchState = scrapeErrors.length > 0 && !matchEvaluation.hasMatch && !!priorState?.hasMatch
 
   const state: AlaskaAlertState = {
     alertId: alert.id,
-    hasMatch: allScrapesFailed && priorState?.hasMatch ? priorState.hasMatch : matchEvaluation.hasMatch,
-    matchedDates: allScrapesFailed && priorState?.hasMatch ? priorState.matchedDates : matchEvaluation.matchedDates,
-    matchingResults: allScrapesFailed && priorState?.hasMatch ? priorState.matchingResults : matchEvaluation.matchingResults,
-    bestMatchSummary: allScrapesFailed && priorState?.hasMatch ? priorState.bestMatchSummary : matchEvaluation.bestMatchSummary,
-    matchFingerprint: allScrapesFailed && priorState?.hasMatch ? priorState.matchFingerprint : matchEvaluation.matchFingerprint,
-    lastMatchAt: allScrapesFailed && priorState?.hasMatch
+    hasMatch: preservePriorMatchState ? priorState.hasMatch : matchEvaluation.hasMatch,
+    matchedDates: preservePriorMatchState ? priorState.matchedDates : matchEvaluation.matchedDates,
+    matchingResults: preservePriorMatchState ? priorState.matchingResults : matchEvaluation.matchingResults,
+    bestMatchSummary: preservePriorMatchState ? priorState.bestMatchSummary : matchEvaluation.bestMatchSummary,
+    matchFingerprint: preservePriorMatchState ? priorState.matchFingerprint : matchEvaluation.matchFingerprint,
+    lastMatchAt: preservePriorMatchState
       ? priorState.lastMatchAt
       : matchEvaluation.hasMatch
         ? nowIso
