@@ -23,18 +23,23 @@ class FakeQuery {
     private readonly filters: Array<{ field: string, operator: "==" | "<=", value: unknown }> = [],
     private readonly orderings: Array<{ field: string, direction: "asc" | "desc" }> = [],
     private readonly maxResults = Number.POSITIVE_INFINITY,
+    private readonly startAfterDoc: FakeDocSnapshot | undefined = undefined,
   ) {}
 
   where(field: string, operator: "==" | "<=", value: unknown) {
-    return new FakeQuery(this.store, [...this.filters, { field, operator, value }], this.orderings, this.maxResults)
+    return new FakeQuery(this.store, [...this.filters, { field, operator, value }], this.orderings, this.maxResults, this.startAfterDoc)
   }
 
   orderBy(field: string, direction: "asc" | "desc" = "asc") {
-    return new FakeQuery(this.store, this.filters, [...this.orderings, { field, direction }], this.maxResults)
+    return new FakeQuery(this.store, this.filters, [...this.orderings, { field, direction }], this.maxResults, this.startAfterDoc)
   }
 
   limit(maxResults: number) {
-    return new FakeQuery(this.store, this.filters, this.orderings, maxResults)
+    return new FakeQuery(this.store, this.filters, this.orderings, maxResults, this.startAfterDoc)
+  }
+
+  startAfter(doc: FakeDocSnapshot) {
+    return new FakeQuery(this.store, this.filters, this.orderings, this.maxResults, doc)
   }
 
   async get() {
@@ -49,17 +54,12 @@ class FakeQuery {
           return actualValue === expectedValue
         return typeof actualValue === "string" && typeof expectedValue === "string" && actualValue <= expectedValue
       }))
-      .sort(([leftId, leftValue], [rightId, rightValue]) => {
-        for (const { field, direction } of this.orderings) {
-          const left = leftValue[field]
-          const right = rightValue[field]
-          if (left === right)
-            continue
+      .sort(([leftId, leftValue], [rightId, rightValue]) => compareDocs(leftId, leftValue, rightId, rightValue, this.orderings))
+      .filter(([id, value]) => {
+        if (!this.startAfterDoc)
+          return true
 
-          const comparison = `${left ?? ""}`.localeCompare(`${right ?? ""}`)
-          return direction === "asc" ? comparison : -comparison
-        }
-        return leftId.localeCompare(rightId)
+        return compareDocs(id, value, this.startAfterDoc.id, this.startAfterDoc.data()!, this.orderings) > 0
       })
       .slice(0, this.maxResults)
       .map(([id, value]) => new FakeDocSnapshot(id, value))
@@ -94,6 +94,26 @@ class FakeFirestore {
       this.collections.set(name, new Map())
     return new FakeCollectionRef(this.collections.get(name)!)
   }
+}
+
+const compareDocs = (
+  leftId: string,
+  leftValue: StoredDoc,
+  rightId: string,
+  rightValue: StoredDoc,
+  orderings: Array<{ field: string, direction: "asc" | "desc" }>,
+) => {
+  for (const { field, direction } of orderings) {
+    const left = leftValue[field]
+    const right = rightValue[field]
+    if (left === right)
+      continue
+
+    const comparison = `${left ?? ""}`.localeCompare(`${right ?? ""}`)
+    return direction === "asc" ? comparison : -comparison
+  }
+
+  return leftId.localeCompare(rightId)
 }
 
 const fakeFirestore = new FakeFirestore()
@@ -180,7 +200,7 @@ describe("listDueAlerts", () => {
     }) as unknown as StoredDoc)
     await fakeFirestore.collection("alaska_alerts").doc("fallback-3").set(buildAlert({
       id: "fallback-3",
-      lastCheckedAt: "2026-04-18T00:30:00.000Z",
+      lastCheckedAt: "2026-04-18T05:30:00.000Z",
       nextCheckAt: undefined,
       updatedAt: "2026-04-18T03:00:00.000Z",
     }) as unknown as StoredDoc)
@@ -191,5 +211,39 @@ describe("listDueAlerts", () => {
     })
 
     expect(dueAlerts.map((alert) => alert.id)).toEqual(["fallback-1", "fallback-2"])
+  })
+
+  it("pages through legacy fallback until due alerts beyond the first page are found", async () => {
+    await fakeFirestore.collection("alaska_alerts").doc("legacy-1").set(buildAlert({
+      id: "legacy-1",
+      lastCheckedAt: "2026-04-18T05:30:00.000Z",
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T01:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("legacy-2").set(buildAlert({
+      id: "legacy-2",
+      lastCheckedAt: "2026-04-18T05:45:00.000Z",
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T02:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("legacy-due").set(buildAlert({
+      id: "legacy-due",
+      lastCheckedAt: "2026-04-18T03:00:00.000Z",
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T03:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("legacy-4").set(buildAlert({
+      id: "legacy-4",
+      lastCheckedAt: "2026-04-18T05:50:00.000Z",
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T04:00:00.000Z",
+    }) as unknown as StoredDoc)
+
+    const dueAlerts = await listDueAlerts(new Date("2026-04-18T06:00:00.000Z"), {
+      limit: 10,
+      migrationFallbackLimit: 2,
+    })
+
+    expect(dueAlerts.map((alert) => alert.id)).toEqual(["legacy-due"])
   })
 })
