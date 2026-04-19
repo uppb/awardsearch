@@ -1,4 +1,5 @@
 import admin from "firebase-admin"
+import { randomUUID } from "node:crypto"
 import { getFirebaseAdminApp } from "./firebase-admin.js"
 import type { AlaskaAlert, AlaskaAlertRun, AlaskaAlertState, NotificationEvent } from "./types.js"
 import type { AlertRepository } from "./evaluator.js"
@@ -39,14 +40,17 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
 
       const pendingSnapshot = await transaction.get(pendingQuery)
       for (const doc of pendingSnapshot.docs) {
+        const claimToken = randomUUID()
         transaction.update(doc.ref, {
           status: "processing",
           claimedAt,
+          claimToken,
         })
         claimedEvents.push({
           ...(doc.data() as NotificationEvent),
           status: "processing",
           claimedAt,
+          claimToken,
         })
       }
 
@@ -59,14 +63,17 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
 
         const staleSnapshot = await transaction.get(staleProcessingQuery)
         for (const doc of staleSnapshot.docs) {
+          const claimToken = randomUUID()
           transaction.update(doc.ref, {
             status: "processing",
             claimedAt,
+            claimToken,
           })
           claimedEvents.push({
             ...(doc.data() as NotificationEvent),
             status: "processing",
             claimedAt,
+            claimToken,
           })
         }
       }
@@ -75,11 +82,20 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     })
   }
 
-  async markNotificationAttempting(id: string, attemptedAt: string) {
-    await firestore().collection("notification_events").doc(id).update({
-      status: "attempting",
-      sentAt: admin.firestore.FieldValue.delete(),
-      failureReason: admin.firestore.FieldValue.delete(),
+  async markNotificationAttempting(id: string, attemptedAt: string, claimToken: string | undefined) {
+    const docRef = firestore().collection("notification_events").doc(id)
+    await firestore().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(docRef)
+      if (!snapshot.exists)
+        throw new Error("notification event not found")
+
+      const current = snapshot.data() as NotificationEvent
+      if (current.status !== "processing" || current.claimToken !== claimToken)
+        throw new Error("stale claim token")
+
+      transaction.update(docRef, {
+        status: "attempting",
+      })
     })
   }
 
@@ -88,6 +104,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "delivered_unconfirmed",
       sentAt: admin.firestore.FieldValue.delete(),
       claimedAt: admin.firestore.FieldValue.delete(),
+      claimToken: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }
@@ -97,6 +114,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "sent",
       sentAt,
       claimedAt: admin.firestore.FieldValue.delete(),
+      claimToken: admin.firestore.FieldValue.delete(),
       failureReason: admin.firestore.FieldValue.delete(),
     })
   }
@@ -105,6 +123,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     await firestore().collection("notification_events").doc(id).update({
       status: "failed",
       claimedAt: admin.firestore.FieldValue.delete(),
+      claimToken: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }

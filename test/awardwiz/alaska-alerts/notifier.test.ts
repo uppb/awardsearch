@@ -10,6 +10,7 @@ describe("sendNotificationEvent", () => {
     createdAt: "2026-04-18T06:00:00.000Z",
     status: "processing",
     claimedAt: undefined,
+    claimToken: "claim-1",
     payload: {
       origin: "SFO",
       destination: "HNL",
@@ -64,7 +65,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
-    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
     expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationFailed).not.toHaveBeenCalled()
     expect(fetchFn).toHaveBeenCalledWith("https://discord.test/webhook", expect.objectContaining({
@@ -104,7 +105,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
-    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
     expect(repository.markNotificationSent).not.toHaveBeenCalled()
     expect(repository.markNotificationDeliveredUnconfirmed).toHaveBeenCalledWith(
       "event-1",
@@ -134,7 +135,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
-    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
     expect(repository.markNotificationSent).not.toHaveBeenCalled()
     expect(repository.markNotificationFailed).toHaveBeenCalledWith(
       "event-1",
@@ -168,7 +169,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)).resolves.toBeUndefined()
 
-    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
     expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationFailed).not.toHaveBeenCalled()
     expect(repository.markNotificationDeliveredUnconfirmed).toHaveBeenCalledWith(
@@ -194,10 +195,34 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
-    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
     expect(fetchFn).not.toHaveBeenCalled()
     expect(repository.markNotificationSent).not.toHaveBeenCalled()
     expect(repository.markNotificationFailed).not.toHaveBeenCalled()
     expect(repository.markNotificationDeliveredUnconfirmed).not.toHaveBeenCalled()
+  })
+
+  it("does not send Discord if the claim token no longer owns the event", async () => {
+    const fetchFn = vi.fn()
+    const repository = {
+      markNotificationAttempting: vi.fn().mockRejectedValue(new Error("stale claim token")),
+      markNotificationSent: vi.fn().mockResolvedValue(undefined),
+      markNotificationDeliveredUnconfirmed: vi.fn().mockResolvedValue(undefined),
+      markNotificationFailed: vi.fn().mockResolvedValue(undefined),
+    }
+
+    await sendNotificationEvent({
+      event,
+      repository,
+      now: new Date("2026-04-18T06:05:00.000Z"),
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+    } as any)
+
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
+    expect(fetchFn).not.toHaveBeenCalled()
+    expect(repository.markNotificationSent).not.toHaveBeenCalled()
+    expect(repository.markNotificationDeliveredUnconfirmed).not.toHaveBeenCalled()
+    expect(repository.markNotificationFailed).not.toHaveBeenCalled()
   })
 })

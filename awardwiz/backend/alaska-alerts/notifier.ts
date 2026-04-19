@@ -1,7 +1,7 @@
 import type { NotificationEvent } from "./types.js"
 
 export type NotificationRepository = {
-  markNotificationAttempting: (id: string, attemptedAt: string) => Promise<void>
+  markNotificationAttempting: (id: string, attemptedAt: string, claimToken: string | undefined) => Promise<void>
   markNotificationSent: (id: string, sentAt: string) => Promise<void>
   markNotificationDeliveredUnconfirmed: (id: string, reason: string) => Promise<void>
   markNotificationFailed: (id: string, reason: string) => Promise<void>
@@ -100,7 +100,7 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
   }
 
   try {
-    await repository.markNotificationAttempting(event.id, now.toISOString())
+    await repository.markNotificationAttempting(event.id, now.toISOString(), event.claimToken)
   } catch {
     return
   }
