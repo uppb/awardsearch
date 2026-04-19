@@ -27,25 +27,58 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     await firestore().collection("notification_events").doc(event.id).set(event)
   }
 
-  async claimPendingNotificationEvents(limit: number, claimedAt: string): Promise<NotificationEvent[]> {
+  async claimPendingNotificationEvents(limit: number, claimedAt: string, staleBefore: string): Promise<NotificationEvent[]> {
     return firestore().runTransaction(async (transaction) => {
-      const query = firestore().collection("notification_events")
+      const collection = firestore().collection("notification_events")
+
+      const claimedEvents: NotificationEvent[] = []
+
+      const pendingQuery = collection
         .where("status", "==", "pending")
         .limit(limit)
 
-      const snapshot = await transaction.get(query)
-      for (const doc of snapshot.docs) {
+      const pendingSnapshot = await transaction.get(pendingQuery)
+      for (const doc of pendingSnapshot.docs) {
         transaction.update(doc.ref, {
+          status: "processing",
+          claimedAt,
+        })
+        claimedEvents.push({
+          ...(doc.data() as NotificationEvent),
           status: "processing",
           claimedAt,
         })
       }
 
-      return snapshot.docs.map((doc) => ({
-        ...(doc.data() as NotificationEvent),
-        status: "processing",
-        claimedAt,
-      }))
+      const remaining = limit - claimedEvents.length
+      if (remaining > 0) {
+        const staleProcessingQuery = collection
+          .where("status", "==", "processing")
+          .where("deliveryAttemptedAt", "==", null)
+          .where("claimedAt", "<=", staleBefore)
+          .limit(remaining)
+
+        const staleSnapshot = await transaction.get(staleProcessingQuery)
+        for (const doc of staleSnapshot.docs) {
+          transaction.update(doc.ref, {
+            status: "processing",
+            claimedAt,
+          })
+          claimedEvents.push({
+            ...(doc.data() as NotificationEvent),
+            status: "processing",
+            claimedAt,
+          })
+        }
+      }
+
+      return claimedEvents
+    })
+  }
+
+  async markNotificationDeliveryAttempted(id: string, attemptedAt: string) {
+    await firestore().collection("notification_events").doc(id).update({
+      deliveryAttemptedAt: attemptedAt,
     })
   }
 
@@ -54,6 +87,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "sent",
       sentAt,
       claimedAt: admin.firestore.FieldValue.delete(),
+      deliveryAttemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: admin.firestore.FieldValue.delete(),
     })
   }
@@ -63,6 +97,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "pending",
       sentAt: admin.firestore.FieldValue.delete(),
       claimedAt: admin.firestore.FieldValue.delete(),
+      deliveryAttemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }
@@ -71,6 +106,7 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     await firestore().collection("notification_events").doc(id).update({
       status: "failed",
       claimedAt: admin.firestore.FieldValue.delete(),
+      deliveryAttemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }

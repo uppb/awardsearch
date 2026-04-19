@@ -12,7 +12,8 @@ if (!webhookUrl)
 const username = process.env["DISCORD_USERNAME"]
 const avatarUrl = process.env["DISCORD_AVATAR_URL"]
 const claimedAt = new Date().toISOString()
-const pendingEvents = await repository.claimPendingNotificationEvents(20, claimedAt)
+const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+const pendingEvents = await repository.claimPendingNotificationEvents(20, claimedAt, staleBefore)
 
 for (const event of pendingEvents) {
   try {

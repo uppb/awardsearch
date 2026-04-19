@@ -10,6 +10,7 @@ describe("sendNotificationEvent", () => {
     createdAt: "2026-04-18T06:00:00.000Z",
     status: "pending",
     claimedAt: undefined,
+    deliveryAttemptedAt: undefined,
     payload: {
       origin: "SFO",
       destination: "HNL",
@@ -50,6 +51,7 @@ describe("sendNotificationEvent", () => {
       text: vi.fn().mockResolvedValue(""),
     })
     const repository = {
+      markNotificationDeliveryAttempted: vi.fn().mockResolvedValue(undefined),
       markNotificationSent: vi.fn().mockResolvedValue(undefined),
       markNotificationPending: vi.fn().mockResolvedValue(undefined),
       markNotificationFailed: vi.fn().mockResolvedValue(undefined),
@@ -63,6 +65,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
+    expect(repository.markNotificationDeliveryAttempted).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationFailed).not.toHaveBeenCalled()
     expect(fetchFn).toHaveBeenCalledWith("https://discord.test/webhook", expect.objectContaining({
@@ -88,6 +91,7 @@ describe("sendNotificationEvent", () => {
       text: vi.fn().mockResolvedValue("rate limited"),
     })
     const repository = {
+      markNotificationDeliveryAttempted: vi.fn().mockResolvedValue(undefined),
       markNotificationSent: vi.fn().mockResolvedValue(undefined),
       markNotificationPending: vi.fn().mockResolvedValue(undefined),
       markNotificationFailed: vi.fn().mockResolvedValue(undefined),
@@ -101,6 +105,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
+    expect(repository.markNotificationDeliveryAttempted).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationSent).not.toHaveBeenCalled()
     expect(repository.markNotificationPending).toHaveBeenCalledWith(
       "event-1",
@@ -116,6 +121,7 @@ describe("sendNotificationEvent", () => {
       text: vi.fn().mockResolvedValue("bad request"),
     })
     const repository = {
+      markNotificationDeliveryAttempted: vi.fn().mockResolvedValue(undefined),
       markNotificationSent: vi.fn().mockResolvedValue(undefined),
       markNotificationPending: vi.fn().mockResolvedValue(undefined),
       markNotificationFailed: vi.fn().mockResolvedValue(undefined),
@@ -129,6 +135,7 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)
 
+    expect(repository.markNotificationDeliveryAttempted).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationSent).not.toHaveBeenCalled()
     expect(repository.markNotificationFailed).toHaveBeenCalledWith(
       "event-1",
@@ -147,6 +154,7 @@ describe("sendNotificationEvent", () => {
       text: vi.fn().mockResolvedValue(""),
     })
     const repository = {
+      markNotificationDeliveryAttempted: vi.fn().mockResolvedValue(undefined),
       markNotificationSent: vi.fn().mockRejectedValue(new Error("firestore unavailable")),
       markNotificationPending: vi.fn().mockResolvedValue(undefined),
       markNotificationFailed: vi.fn().mockResolvedValue(undefined),
@@ -160,11 +168,9 @@ describe("sendNotificationEvent", () => {
       fetchFn,
     } as any)).resolves.toBeUndefined()
 
+    expect(repository.markNotificationDeliveryAttempted).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
     expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
-    expect(repository.markNotificationPending).toHaveBeenCalledWith(
-      "event-1",
-      expect.stringContaining("firestore unavailable"),
-    )
+    expect(repository.markNotificationPending).not.toHaveBeenCalled()
     expect(repository.markNotificationFailed).not.toHaveBeenCalled()
   })
 })
