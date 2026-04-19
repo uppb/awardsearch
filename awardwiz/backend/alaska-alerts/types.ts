@@ -87,7 +87,12 @@ export type NotificationEvent = {
     destination: string
     cabin: AlaskaAlertCabin
     matchedDates: string[]
+    matchCount?: number
+    nonstopOnly?: boolean
+    maxMiles?: number | undefined
+    maxCash?: number | undefined
     bestMatch: AlaskaAlertMatch | undefined
+    bookingUrl?: string
   }
   status: "pending" | "sent" | "failed"
   sentAt: string | undefined

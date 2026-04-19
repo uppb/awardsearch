@@ -105,6 +105,9 @@ describe("evaluateOneAlert", () => {
     expect(search).toHaveBeenCalledWith({ origin: "SFO", destination: "HNL", departureDate: "2026-07-01" })
     expect(repo.saveEvaluation).toHaveBeenCalledTimes(1)
     expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      alert: expect.objectContaining({
+        id: "alert-1",
+      }),
       state: expect.objectContaining({
         alertId: "alert-1",
         hasMatch: true,
@@ -140,6 +143,40 @@ describe("evaluateOneAlert", () => {
         }),
       }),
       status: "pending",
+    }))
+  })
+
+  it("creates a Discord-ready notification payload with a bookingUrl for the best match date", async () => {
+    const repo = {
+      getState: vi.fn<[], Promise<AlaskaAlertState | undefined>>().mockResolvedValue(undefined),
+      saveEvaluation: vi.fn().mockResolvedValue(undefined),
+      createNotificationEvent: vi.fn().mockResolvedValue(undefined),
+    }
+    const search = vi.fn().mockResolvedValue(flights)
+
+    await evaluateOneAlert({
+      alert,
+      repository: repo,
+      searchAlaska: search,
+      now: new Date("2026-04-18T06:00:00.000Z"),
+    })
+
+    expect(repo.createNotificationEvent).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        origin: "SFO",
+        destination: "HNL",
+        cabin: "business",
+        matchedDates: ["2026-07-01"],
+        matchCount: 1,
+        nonstopOnly: true,
+        maxMiles: 90000,
+        maxCash: 10,
+        bestMatch: expect.objectContaining({
+          date: "2026-07-01",
+          flightNo: "AS 843",
+        }),
+        bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+      }),
     }))
   })
 
@@ -199,6 +236,9 @@ describe("evaluateOneAlert", () => {
 
     expect(repo.createNotificationEvent).not.toHaveBeenCalled()
     expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      alert: expect.objectContaining({
+        id: "alert-1",
+      }),
       state: expect.objectContaining({
         lastNotifiedAt: "2026-04-18T05:00:00.000Z",
       }),
@@ -300,5 +340,45 @@ describe("evaluateOneAlert", () => {
 
     second.resolve([])
     await evaluation
+  })
+
+  it("records scrape errors but still keeps successful matches from other dates", async () => {
+    const rangeAlert: AlaskaAlert = {
+      ...alert,
+      dateMode: "date_range",
+      date: undefined,
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+    }
+    const repo = {
+      getState: vi.fn<[], Promise<AlaskaAlertState | undefined>>().mockResolvedValue(undefined),
+      saveEvaluation: vi.fn().mockResolvedValue(undefined),
+      createNotificationEvent: vi.fn().mockResolvedValue(undefined),
+    }
+    const search = vi.fn()
+      .mockResolvedValueOnce(flights)
+      .mockRejectedValueOnce(new Error("alaska 500"))
+
+    await evaluateOneAlert({
+      alert: rangeAlert,
+      repository: repo,
+      searchAlaska: search,
+      now: new Date("2026-04-18T06:00:00.000Z"),
+    })
+
+    expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        hasMatch: true,
+        lastErrorAt: "2026-04-18T06:00:00.000Z",
+        lastErrorMessage: "alaska 500",
+      }),
+      run: expect.objectContaining({
+        scrapeCount: 2,
+        scrapeSuccessCount: 1,
+        scrapeErrorCount: 1,
+        hasMatch: true,
+        errorSummary: "alaska 500",
+      }),
+    }))
   })
 })
