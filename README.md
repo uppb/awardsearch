@@ -50,6 +50,7 @@ Defined but currently disabled in `config.json`:
 ## Repo Layout
 
 - `awardwiz/`: React frontend, shared search pipeline, Firebase integration, workers, and static assets.
+- `awardwiz/backend/alaska-alerts/`: backend-only Alaska alert domain, matching, persistence, scheduling, and notification modules.
 - `awardwiz-scrapers/`: scraper server, CLI debug entry point, scraper modules, and typed airline response shapes.
 - `arkalis/`: internal Chromium/CDP automation layer used by the scrapers.
 - `test/awardwiz/`: stub-driven tests for route discovery and result merging.
@@ -152,8 +153,11 @@ Optional for the browser app:
 
 ### Workers
 
-- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators.
+- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators, and by the Alaska evaluator / Firestore repository path when not using emulators.
 - `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
+- `DISCORD_WEBHOOK_URL`: Required by `awardwiz/workers/alaska-alerts-notifier.ts`.
+- `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/alaska-alerts-notifier.ts`.
+- `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/alaska-alerts-notifier.ts`.
 
 ### Scraper Server
 
@@ -180,6 +184,14 @@ The marked-fares flow is implemented, but it is not a general-purpose finished f
 - The worker re-runs searches and compares current saver availability against the saved state.
 - Emails are only sent when saver availability changes.
 - The worker currently filters to a hardcoded beta-user allowlist.
+
+There is also an in-progress backend-only Alaska alert path:
+
+- `awardwiz/workers/alaska-alerts-evaluator.ts` evaluates due Alaska alerts and writes alert state plus notification events for matching Alaska alerts.
+- `awardwiz/workers/alaska-alerts-notifier.ts` posts those pending notification events to a shared Discord webhook.
+- Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
+- Each Discord alert includes the generic Alaska booking results link for the best matched date.
+- This backend path is still under active development and is not yet wired into a user-facing CRUD/API flow.
 
 ## Arkalis Summary
 
