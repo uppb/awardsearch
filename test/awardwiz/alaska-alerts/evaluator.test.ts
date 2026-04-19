@@ -129,7 +129,6 @@ describe("evaluateOneAlert", () => {
     expect(repo.createNotificationEvent).toHaveBeenCalledWith(expect.objectContaining({
       alertId: "alert-1",
       userId: "user-1",
-      channel: "email",
       payload: expect.objectContaining({
         origin: "SFO",
         destination: "HNL",

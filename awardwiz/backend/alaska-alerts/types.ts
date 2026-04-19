@@ -81,7 +81,6 @@ export type NotificationEvent = {
   alertId: string
   userId: string
   createdAt: string
-  channel: "email"
   payload: {
     origin: string
     destination: string

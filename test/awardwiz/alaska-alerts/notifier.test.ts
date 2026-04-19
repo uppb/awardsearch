@@ -8,7 +8,6 @@ describe("sendNotificationEvent", () => {
     alertId: "alert-1",
     userId: "user-1",
     createdAt: "2026-04-18T06:00:00.000Z",
-    channel: "email",
     payload: {
       origin: "SFO",
       destination: "HNL",

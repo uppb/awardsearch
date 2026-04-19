@@ -94,7 +94,6 @@ export const evaluateOneAlert = async ({ alert, repository, searchAlaska, now }:
     alertId: alert.id,
     userId: alert.userId,
     createdAt: nowIso,
-    channel: "email",
     payload: {
       origin: alert.origin,
       destination: alert.destination,
