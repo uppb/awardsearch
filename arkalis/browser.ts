@@ -9,11 +9,18 @@ const exec = promisify(execNoPromise)
 
 export const arkalisBrowser = async (arkalis: ArkalisCore) => {
   async function genWindowCoords() {
-    const screenResolution = await exec("xdpyinfo | grep dimensions")
-    const rawRes = / (?<res>\d+x\d+) /u.exec(screenResolution.stdout)?.groups?.["res"]?.trim().split("x")
-    if (!rawRes || rawRes.length !== 2)
-      throw new Error("Unable to get screen resolution")
-    const res = (rawRes as [string, string]).map(num => parseInt(num)) as [number, number]
+    let res: [number, number]
+    try {
+      const screenResolution = await exec("xdpyinfo | grep dimensions")
+      const rawRes = / (?<res>\d+x\d+) /u.exec(screenResolution.stdout)?.groups?.["res"]?.trim().split("x")
+      if (!rawRes || rawRes.length !== 2)
+        throw new Error("Unable to get screen resolution")
+      res = (rawRes as [string, string]).map(num => parseInt(num)) as [number, number]
+    } catch (e) {
+      arkalis.log("Failed to get screen resolution, falling back to 1920x1080:", e)
+      res = [1920, 1080]
+    }
+
     const size = [Math.ceil(res[0] * (Math.random() * 0.2 + 0.8)), Math.ceil(res[1] * (Math.random() * 0.2 + 0.8))] as const
     return {
       size,

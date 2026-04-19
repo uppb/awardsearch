@@ -68,9 +68,13 @@ run-marked-fares-worker:
 run-server: build
   node --enable-source-maps dist/awardwiz-scrapers/main-server.js
 
-# ⭐️ starts a scraper in docker (ex. `just run-scraper aa SFO LAX 2023-12-01`)
+# ⭐️ starts a scraper locally (uses xvfb-run automatically when no DISPLAY is available)
 run-scraper scraper origin destination date: build
-  node --enable-source-maps dist/awardwiz-scrapers/main-debug.js {{scraper}} {{origin}} {{destination}} {{date}}
+  if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
+    CHROME_PATH="${CHROME_PATH:-/usr/sbin/chromium}" xvfb-run -a node --enable-source-maps dist/awardwiz-scrapers/main-debug.js {{scraper}} {{origin}} {{destination}} {{date}}; \
+  else \
+    node --enable-source-maps dist/awardwiz-scrapers/main-debug.js {{scraper}} {{origin}} {{destination}} {{date}}; \
+  fi
 
 # runs live anti-botting tests online against a variety of websites bot fingerprinting websites (EXPERIMENTAL and still doesn't fully succeed)
 run-live-botting-tests: build
@@ -93,11 +97,11 @@ run-live-botting-tests: build
 # # build arkalis docker image
 # [private]
 # build-arkalis-docker:
-#   docker buildx build --platform=linux/amd64 --file ./arkalis/Dockerfile -t "arkalis" ./
+#   docker buildx build --platform=linux/{{dockerarch}} --file ./arkalis/Dockerfile -t "arkalis" ./
 
 # # build, deploy and run in prod
 # [private]
-# deploy-prod tag="registry.kub.lg.io:31119/awardwiz:scrapers" platform="amd64" kubectl-deployment="-n awardwiz deployment/awardwiz": (build-docker "0" tag platform)
+# deploy-prod tag="registry.kub.lg.io:31119/awardwiz:scrapers" platform=dockerarch kubectl-deployment="-n awardwiz deployment/awardwiz": (build-docker "0" tag platform)
 #   docker push {{tag}}
 #   kubectl rollout restart {{kubectl-deployment}}
 #   kubectl rollout status {{kubectl-deployment}}
@@ -113,7 +117,7 @@ run-live-botting-tests: build
 
 # [private]
 # test-anti-botting-prod:
-#   @just build-docker "1" "registry.kub.lg.io:31119/awardwiz:test" "amd64"
+#   @just build-docker "1" "registry.kub.lg.io:31119/awardwiz:test" dockerarch
 #   docker push "registry.kub.lg.io:31119/awardwiz:test"
 #   kubectl run arkalis-test-anti-botting \
 #     --rm --restart=Never --pod-running-timeout=30s --attach --stdin \
