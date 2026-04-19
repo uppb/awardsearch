@@ -2,6 +2,7 @@ import type { NotificationEvent } from "./types.js"
 
 export type NotificationRepository = {
   markNotificationSent: (id: string, sentAt: string) => Promise<void>
+  markNotificationPending: (id: string, reason: string) => Promise<void>
   markNotificationFailed: (id: string, reason: string) => Promise<void>
 }
 
@@ -18,6 +19,16 @@ export type DiscordWebhookFetch = (input: string, init: {
 }) => Promise<DiscordWebhookResponse>
 
 const formatLimit = (value: number | undefined, label: string) => value === undefined ? `Any ${label}` : `${value.toLocaleString()} ${label}`
+
+const isRetryableDiscordStatus = (status: number) => status === 429 || status >= 500
+
+const safeResponseText = async (response: DiscordWebhookResponse) => {
+  try {
+    return await response.text()
+  } catch {
+    return ""
+  }
+}
 
 const buildDiscordWebhookBody = (event: NotificationEvent, username: string | undefined, avatarUrl: string | undefined) => {
   const bestMatch = event.payload.bestMatch
@@ -73,6 +84,22 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
   username?: string
   avatarUrl?: string
 }) => {
+  const recordRetryableFailure = async (reason: string) => {
+    try {
+      await repository.markNotificationPending(event.id, reason)
+    } catch {
+      // Best effort: keep the notifier moving even if the requeue write fails.
+    }
+  }
+
+  const recordPermanentFailure = async (reason: string) => {
+    try {
+      await repository.markNotificationFailed(event.id, reason)
+    } catch {
+      // Best effort: keep the notifier moving even if the failure write fails.
+    }
+  }
+
   try {
     const response = await fetchFn(webhookUrl, {
       method: "POST",
@@ -83,12 +110,21 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
     })
 
     if (!response.ok) {
-      const responseText = await response.text()
-      throw new Error(`Discord webhook request failed with status ${response.status}: ${responseText}`)
+      const responseText = await safeResponseText(response)
+      const reason = `Discord webhook request failed with status ${response.status}: ${responseText}`
+      if (isRetryableDiscordStatus(response.status))
+        await recordRetryableFailure(reason)
+      else
+        await recordPermanentFailure(reason)
+      return
     }
 
-    await repository.markNotificationSent(event.id, now.toISOString())
+    try {
+      await repository.markNotificationSent(event.id, now.toISOString())
+    } catch (error) {
+      await recordRetryableFailure(`Failed to record sent notification status: ${(error as Error).message}`)
+    }
   } catch (error) {
-    await repository.markNotificationFailed(event.id, (error as Error).message)
+    await recordRetryableFailure(`Discord webhook request failed: ${(error as Error).message}`)
   }
 }

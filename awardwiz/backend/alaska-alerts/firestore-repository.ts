@@ -27,26 +27,50 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     await firestore().collection("notification_events").doc(event.id).set(event)
   }
 
-  async listPendingNotificationEvents(limit: number): Promise<NotificationEvent[]> {
-    const snapshot = await firestore().collection("notification_events")
-      .where("status", "==", "pending")
-      .limit(limit)
-      .get()
+  async claimPendingNotificationEvents(limit: number, claimedAt: string): Promise<NotificationEvent[]> {
+    return firestore().runTransaction(async (transaction) => {
+      const query = firestore().collection("notification_events")
+        .where("status", "==", "pending")
+        .limit(limit)
 
-    return snapshot.docs.map((doc) => doc.data() as NotificationEvent)
+      const snapshot = await transaction.get(query)
+      for (const doc of snapshot.docs) {
+        transaction.update(doc.ref, {
+          status: "processing",
+          claimedAt,
+        })
+      }
+
+      return snapshot.docs.map((doc) => ({
+        ...(doc.data() as NotificationEvent),
+        status: "processing",
+        claimedAt,
+      }))
+    })
   }
 
   async markNotificationSent(id: string, sentAt: string) {
     await firestore().collection("notification_events").doc(id).update({
       status: "sent",
       sentAt,
+      claimedAt: admin.firestore.FieldValue.delete(),
       failureReason: admin.firestore.FieldValue.delete(),
+    })
+  }
+
+  async markNotificationPending(id: string, reason: string) {
+    await firestore().collection("notification_events").doc(id).update({
+      status: "pending",
+      sentAt: admin.firestore.FieldValue.delete(),
+      claimedAt: admin.firestore.FieldValue.delete(),
+      failureReason: reason,
     })
   }
 
   async markNotificationFailed(id: string, reason: string) {
     await firestore().collection("notification_events").doc(id).update({
       status: "failed",
+      claimedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }

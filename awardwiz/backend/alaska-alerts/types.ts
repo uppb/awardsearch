@@ -81,6 +81,8 @@ export type NotificationEvent = {
   alertId: string
   userId: string
   createdAt: string
+  status: "pending" | "processing" | "sent" | "failed"
+  claimedAt?: string
   payload: {
     origin: string
     destination: string
@@ -93,7 +95,6 @@ export type NotificationEvent = {
     bestMatch: AlaskaAlertMatch | undefined
     bookingUrl: string
   }
-  status: "pending" | "sent" | "failed"
   sentAt: string | undefined
   failureReason: string | undefined
 }

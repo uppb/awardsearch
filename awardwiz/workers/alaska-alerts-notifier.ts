@@ -11,17 +11,23 @@ if (!webhookUrl)
 
 const username = process.env["DISCORD_USERNAME"]
 const avatarUrl = process.env["DISCORD_AVATAR_URL"]
-const pendingEvents = await repository.listPendingNotificationEvents(20)
+const claimedAt = new Date().toISOString()
+const pendingEvents = await repository.claimPendingNotificationEvents(20, claimedAt)
 
-for (const event of pendingEvents)
-  await sendNotificationEvent({
-    event,
-    repository,
-    now: new Date(),
-    webhookUrl,
-    fetchFn: fetch,
-    username,
-    avatarUrl,
-  })
+for (const event of pendingEvents) {
+  try {
+    await sendNotificationEvent({
+      event,
+      repository,
+      now: new Date(),
+      webhookUrl,
+      fetchFn: fetch,
+      username,
+      avatarUrl,
+    })
+  } catch (error) {
+    console.error(`failed to process notification event ${event.id}:`, error)
+  }
+}
 
 console.log(`processed ${pendingEvents.length} notification event(s)`)

@@ -8,6 +8,8 @@ describe("sendNotificationEvent", () => {
     alertId: "alert-1",
     userId: "user-1",
     createdAt: "2026-04-18T06:00:00.000Z",
+    status: "pending",
+    claimedAt: undefined,
     payload: {
       origin: "SFO",
       destination: "HNL",
@@ -33,7 +35,6 @@ describe("sendNotificationEvent", () => {
       },
       bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
     },
-    status: "pending",
     sentAt: undefined,
     failureReason: undefined,
   }
@@ -50,6 +51,7 @@ describe("sendNotificationEvent", () => {
     })
     const repository = {
       markNotificationSent: vi.fn().mockResolvedValue(undefined),
+      markNotificationPending: vi.fn().mockResolvedValue(undefined),
       markNotificationFailed: vi.fn().mockResolvedValue(undefined),
     }
 
@@ -79,14 +81,43 @@ describe("sendNotificationEvent", () => {
     })
   })
 
-  it("marks the event as failed when the Discord webhook returns a non-2xx response", async () => {
+  it("requeues the event when Discord returns a retryable 429 response", async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: false,
-      status: 500,
-      text: vi.fn().mockResolvedValue("discord unavailable"),
+      status: 429,
+      text: vi.fn().mockResolvedValue("rate limited"),
     })
     const repository = {
       markNotificationSent: vi.fn().mockResolvedValue(undefined),
+      markNotificationPending: vi.fn().mockResolvedValue(undefined),
+      markNotificationFailed: vi.fn().mockResolvedValue(undefined),
+    }
+
+    await sendNotificationEvent({
+      event,
+      repository,
+      now: new Date("2026-04-18T06:05:00.000Z"),
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+    } as any)
+
+    expect(repository.markNotificationSent).not.toHaveBeenCalled()
+    expect(repository.markNotificationPending).toHaveBeenCalledWith(
+      "event-1",
+      expect.stringContaining("Discord webhook request failed with status 429"),
+    )
+    expect(repository.markNotificationFailed).not.toHaveBeenCalled()
+  })
+
+  it("marks the event as failed when the Discord webhook returns a non-2xx response", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: vi.fn().mockResolvedValue("bad request"),
+    })
+    const repository = {
+      markNotificationSent: vi.fn().mockResolvedValue(undefined),
+      markNotificationPending: vi.fn().mockResolvedValue(undefined),
       markNotificationFailed: vi.fn().mockResolvedValue(undefined),
     }
 
@@ -101,11 +132,39 @@ describe("sendNotificationEvent", () => {
     expect(repository.markNotificationSent).not.toHaveBeenCalled()
     expect(repository.markNotificationFailed).toHaveBeenCalledWith(
       "event-1",
-      expect.stringContaining("Discord webhook request failed with status 500"),
+      expect.stringContaining("Discord webhook request failed with status 400"),
     )
     expect(repository.markNotificationFailed).toHaveBeenCalledWith(
       "event-1",
-      expect.stringContaining("discord unavailable"),
+      expect.stringContaining("bad request"),
     )
+  })
+
+  it("does not mark the event failed when persisting sent status fails", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: vi.fn().mockResolvedValue(""),
+    })
+    const repository = {
+      markNotificationSent: vi.fn().mockRejectedValue(new Error("firestore unavailable")),
+      markNotificationPending: vi.fn().mockResolvedValue(undefined),
+      markNotificationFailed: vi.fn().mockResolvedValue(undefined),
+    }
+
+    await expect(sendNotificationEvent({
+      event,
+      repository,
+      now: new Date("2026-04-18T06:05:00.000Z"),
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+    } as any)).resolves.toBeUndefined()
+
+    expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z")
+    expect(repository.markNotificationPending).toHaveBeenCalledWith(
+      "event-1",
+      expect.stringContaining("firestore unavailable"),
+    )
+    expect(repository.markNotificationFailed).not.toHaveBeenCalled()
   })
 })
