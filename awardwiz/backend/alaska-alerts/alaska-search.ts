@@ -9,6 +9,24 @@ const debugOptions: DebugOptions = {
   liveLog: null,
 }
 
+const buildAlaskaSearchKey = (origin: string, destination: string, departureDate: string) =>
+  `${origin}-${destination}-${departureDate}`
+
+export const memoizeAlaskaSearch = (search: AlaskaSearch): AlaskaSearch => {
+  const cache = new Map<string, ReturnType<AlaskaSearch>>()
+
+  return async (query) => {
+    const key = buildAlaskaSearchKey(query.origin, query.destination, query.departureDate)
+    const cached = cache.get(key)
+    if (cached)
+      return cached
+
+    const result = search(query)
+    cache.set(key, result)
+    return result
+  }
+}
+
 export const searchAlaska: AlaskaSearch = async (query) => {
   const cacheKey = `${meta.name}-${query.origin}${query.destination}-${query.departureDate}`
   const response = await runArkalis((arkalis) => runScraper(arkalis, query), debugOptions, meta, cacheKey)

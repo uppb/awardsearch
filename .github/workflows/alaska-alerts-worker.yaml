@@ -1,0 +1,37 @@
+name: Alaska Alerts Worker
+on:
+  push:
+    branches: ["master"]
+
+  schedule:
+    - cron: '*/10 * * * *' # every 10 minutes
+
+concurrency:
+  group: "alaska-alerts-worker"
+  cancel-in-progress: true
+
+jobs:
+  alaska-alerts-worker:
+    name: alaska-alerts-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: workers
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      TMP_PATH: /tmp
+      VITE_FIREBASE_CONFIG_JSON: ${{ secrets.VITE_FIREBASE_CONFIG_JSON }}
+      VITE_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.VITE_FIREBASE_SERVICE_ACCOUNT_JSON }}
+      VITE_LOKI_LOGGING_URL: ${{ secrets.VITE_LOKI_LOGGING_URL }}
+      VITE_LOKI_LOGGING_UID: alaska_alerts_worker
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_USERNAME: ${{ secrets.DISCORD_USERNAME }}
+      DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: extractions/setup-just@v1
+      - uses: actions/setup-node@v3
+        with:
+          cache: 'npm'
+      - run: npm ci
+      - run: just run-alaska-alerts-evaluator
+      - run: just run-alaska-alerts-notifier

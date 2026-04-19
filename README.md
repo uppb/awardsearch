@@ -189,6 +189,7 @@ There is also an in-progress backend-only Alaska alert path:
 
 - `awardwiz/workers/alaska-alerts-evaluator.ts` updates alert state and run records for due Alaska alerts, and emits notification events when a matching alert is eligible to notify again.
 - `awardwiz/workers/alaska-alerts-notifier.ts` posts those pending notification events to a shared Discord webhook.
+- `.github/workflows/alaska-alerts-worker.yaml` runs the evaluator and notifier on merges to `master` and on a cron schedule in the shared `workers` environment.
 - Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
 - Each Discord alert includes the generic Alaska booking results link for the best matched date.
 - This backend path is still under active development and is not yet wired into a user-facing CRUD/API flow.
