@@ -27,7 +27,7 @@ Current behavior:
 - the `marked-fares` worker re-runs a generic search
 - it checks one exact `flightNo + cabin`
 - it only detects saver-availability changes
-- it sends email only
+- it delivers only through the legacy email path
 - it is effectively beta-only because it filters to a hardcoded user allowlist
 
 That model is too narrow for the required Alaska alerts because the new feature must support:
@@ -64,7 +64,7 @@ Each alert supports:
 - optional `max_miles`
 - optional `max_cash`
 - `active`
-- notification destination metadata
+- notification cadence fields only
 
 ### Explicit non-goals for v1
 
@@ -76,7 +76,7 @@ The following are out of scope for the first version:
 - connection preference beyond `nonstop_only`
 - deduplicated shared route snapshots across all users
 - user-facing alert management UI
-- push notifications, SMS, or webhook fanout beyond one initial notification channel
+- push notifications, SMS, bot-based Discord integration, or multi-channel fanout
 
 ## 4. Key Decisions
 
@@ -119,6 +119,17 @@ The frontend, if added later, is a client of this backend. It is not part of the
 If an alert currently matches, the system may notify repeatedly.
 
 However, the design still includes a minimum notification interval so repeated notifications are controlled rather than sending on every single evaluation loop.
+
+### Decision 5: Deliver V1 Notifications Through One Shared Discord Webhook
+
+V1 notifications are sent only to one shared Discord channel via a webhook URL.
+
+Reason:
+
+- one shared destination is enough for the current operating model
+- Discord webhooks are materially simpler than a full bot integration
+- this keeps delivery channel-specific logic out of the evaluator
+- it avoids the SMTP and user-email lookup path entirely for Alaska alerts
 
 ## 5. Proposed Architecture
 
@@ -164,10 +175,12 @@ This is the core of the system.
 Responsible for:
 
 - consuming notification events
-- sending outbound notifications
+- posting outbound notifications to Discord
 - recording delivery success or failure
 
-The notifier must be isolated from scraping so email failures do not block search evaluation progress.
+The notifier must be isolated from scraping so Discord delivery failures do not block search evaluation progress.
+
+The notifier uses one shared Discord webhook and does not route by user.
 
 ## 6. Data Model
 
@@ -202,7 +215,6 @@ Optional future fields:
 
 - `include_flight_numbers`
 - `exclude_flight_numbers`
-- `notification_channel`
 - `timezone`
 
 ### 6.2 `alaska_alert_state`
@@ -263,7 +275,6 @@ Fields:
 - `alert_id`
 - `user_id`
 - `created_at`
-- `channel`
 - `payload`
 - `status`: `pending | sent | failed`
 - `sent_at` nullable
@@ -273,6 +284,33 @@ Purpose:
 
 - decouple evaluation from delivery
 - allow retries without re-running searches
+
+V1 assumption:
+
+- all events are destined for the shared Discord webhook
+
+Required payload fields:
+
+- `origin`
+- `destination`
+- `cabin`
+- `matched_dates`
+- `match_count`
+- `nonstop_only`
+- `max_miles` nullable
+- `max_cash` nullable
+- `best_match`
+- `booking_url`
+
+`best_match` must include enough information to render a useful Discord summary:
+
+- `date`
+- `flight_no`
+- `segment_count`
+- `miles`
+- `cash`
+- `currency`
+- `booking_class`
 
 ## 7. Match Model
 
@@ -320,6 +358,7 @@ Therefore:
 
 - a notification may be emitted whenever `has_match=true`
 - repeated notifications are limited only by `min_notification_interval_minutes`
+- the emitted event should point users to the generic Alaska booking page for the best matched date
 
 This differs from the current `marked_fares` flow, which only notifies on state transition.
 
@@ -388,9 +427,21 @@ If:
 
 then create a `notification_events` record.
 
+The event payload must include a `booking_url` pointing to the generic Alaska results page for the best matched date, using the standard award-search query shape:
+
+- `A=1`
+- `O=<origin>`
+- `D=<destination>`
+- `OD=<best matched date>`
+- `OT=Anytime`
+- `RT=false`
+- `UPG=none`
+- `ShoppingMethod=onlineaward`
+- `locale=en-us`
+
 ### Step 8: Send notification
 
-The notifier picks up pending events, sends them, and records delivery outcome.
+The notifier picks up pending events, posts one Discord webhook message per event, and records delivery outcome.
 
 ## 9. Failure Handling
 
@@ -416,6 +467,7 @@ If sending fails:
 - keep the event with `status=failed`
 - store the failure reason
 - make retries possible without re-running the scrape
+- treat Discord `429` and transient network failures as retryable operational failures
 
 ### Partial data
 
@@ -472,6 +524,12 @@ Instead, backend-only modules should own:
 - evaluator types
 - notifier payload types
 - service credentials
+
+Backend-only notification configuration for v1:
+
+- `DISCORD_WEBHOOK_URL`
+- optional `DISCORD_USERNAME`
+- optional `DISCORD_AVATAR_URL`
 
 If the scraper server remains a separate HTTP service, backend workers should authenticate through the existing service-worker JWT path rather than frontend user tokens.
 
@@ -540,11 +598,13 @@ Exit criteria:
 
 - create notification event model
 - create notifier worker
+- implement Discord webhook delivery
+- include generic Alaska booking URL in each event payload
 - implement minimum notification interval enforcement
 
 Exit criteria:
 
-- alerts send repeated notifications while matching, subject to throttle interval
+- alerts post repeated notifications to the shared Discord channel while matching, subject to throttle interval
 
 ### Phase 5: Hardening
 
@@ -577,6 +637,7 @@ Test:
 - repository reads/writes
 - evaluator behavior with mocked Alaska scraper responses
 - notification event creation
+- Discord webhook payload formatting
 - partial failures across date ranges
 
 ### Live verification
@@ -585,7 +646,7 @@ Test:
 
 - a backend job can run the real Alaska scraper
 - the evaluator can produce matches from live scraper output
-- notifications are emitted from real matching results in a controlled environment
+- notifications are emitted to a test Discord webhook from real matching results in a controlled environment
 
 ## 15. Migration And Compatibility Notes
 
@@ -603,7 +664,7 @@ This avoids coupling the new service to the old beta-only design.
 
 The following can be decided later without blocking the core architecture:
 
-- whether notifications are email-only or multi-channel
+- whether the notifier should support multiple Discord webhooks or other channels
 - whether alerts should support include/exclude flight-number filters
 - whether date ranges should support rolling windows such as "next 7 days"
 - whether route/date snapshots should become shared persistent cache records
@@ -617,6 +678,7 @@ Build the Alaska alert system as a new backend-only TypeScript service that:
 - stores rule-based alert definitions
 - evaluates single-date and date-range alerts
 - records alert state and run history
-- emits repeated notifications while availability exists, gated by a minimum notification interval
+- emits repeated Discord webhook notifications while availability exists, gated by a minimum notification interval
+- includes a direct link to the generic Alaska booking results page for the best matched date
 
 This is the lowest-risk path that matches the current codebase while still creating clean long-term boundaries.
