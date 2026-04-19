@@ -63,7 +63,7 @@ describe("awardwiz scrapers", () => {
       expect(results.result!.every((flight) => flight.fares.every((fare) => fare.miles > 1000))).toBeTruthy()
 
     // Ensure that there there are no unexpected missing attributes
-    const expectedFlightKeys: KeysEnum<FlightWithFares> = { flightNo: true, departureDateTime: true, arrivalDateTime: true, origin: true, destination: true, duration: true, fares: true, aircraft: true, amenities: true }
+    const expectedFlightKeys: KeysEnum<FlightWithFares> = { flightNo: true, departureDateTime: true, arrivalDateTime: true, origin: true, destination: true, duration: true, aircraft: true, segmentCount: true, fares: true, amenities: true }
     for (const flight of results.result!) {
       const rawFlight: Record<string, any> = flight
       const undefinedFlightKeys = Object.keys(expectedFlightKeys).filter((check) => rawFlight[check] === undefined && !(scraper.missingAttribs?.includes(check as keyof FlightWithFares)))

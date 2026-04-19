@@ -99,6 +99,7 @@ export const runScraper: AwardWizScraper = async (arkalis, query) => {
       flightNo: `${result.segments[0]!.operatingCarrierCode} ${result.segments[0]!.flightNumber}`,
       duration: result.totalDuration,
       aircraft: equipmentTypeLookup[result.segments[0]!.aircraftEquipmentType],
+      segmentCount: result.segments.length,
       fares: [],
       amenities: {
         hasPods: undefined,

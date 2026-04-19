@@ -1,6 +1,16 @@
+import type { FlightWithFares } from "../../types/scrapers.js"
+
 export type AlaskaAlertDateMode = "single_date" | "date_range"
 
 export type AlaskaAlertCabin = "economy" | "business" | "first"
+
+export type AlaskaSearchQuery = {
+  origin: string
+  destination: string
+  departureDate: string
+}
+
+export type AlaskaSearch = (query: AlaskaSearchQuery) => Promise<FlightWithFares[]>
 
 export type AlaskaAlert = {
   id: string

@@ -16,10 +16,12 @@ export const meta: ScraperMetadata = {
 export const buildResultsUrl = (query: AwardWizQuery) =>
   `https://www.alaskaair.com/search/results?A=1&O=${encodeURIComponent(query.origin)}&D=${encodeURIComponent(query.destination)}&OD=${encodeURIComponent(query.departureDate)}&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us`
 
+export const inlineResultsScriptPattern = /__sveltekit_[\w$]+\.resolve\(\d+,\s*\(\)\s*=>\s*\[\{departureStation:/u
+
 export const runScraper: AwardWizScraper = async (arkalis, query) => {
   arkalis.goto(buildResultsUrl(query))
   await arkalis.waitFor({
-    pageReady: { type: "html", html: /__sveltekit_[\w$]+\.resolve\(2,\s*\(\)\s*=>\s*\[\{departureStation:/u },
+    pageReady: { type: "html", html: inlineResultsScriptPattern },
   })
   const inlineScripts = await arkalis.evaluate<string[]>(`
     Array.from(document.querySelectorAll("script"))
@@ -186,7 +188,9 @@ const isSaverFare = (fareKey: string, cabins: string[]) =>
   fareKey.includes("SAVER") || cabins.some((cabin) => cabin === "SAVER")
 
 const awardCabinToSharedCabin = (cabin: string) => {
-  if (cabin === "FIRST" || cabin === "BUSINESS")
+  if (cabin === "FIRST")
+    return "first"
+  if (cabin === "BUSINESS")
     return "business"
   if (cabin === "MAIN" || cabin === "SAVER" || cabin === "COACH")
     return "economy"
@@ -197,22 +201,24 @@ export const standardizeResults = (raw: AlaskaResponse, query: AwardWizQuery): F
   const results: FlightWithFares[] = []
 
   for (const row of raw.rows ?? []) {
-    if (row.segments.length > 1)
+    const firstSegment = row.segments[0]
+    const lastSegment = row.segments.at(-1)
+    if (!firstSegment || !lastSegment)
       continue
-    const segment = row.segments[0]!
 
     const result: FlightWithFares = {
-      departureDateTime: segment.departureTime.slice(0, 19).replace("T", " "),
-      arrivalDateTime: segment.arrivalTime.slice(0, 19).replace("T", " "),
-      origin: segment.departureStation,
-      destination: segment.arrivalStation,
-      flightNo: `${segment.publishingCarrier.carrierCode} ${segment.publishingCarrier.flightNumber}`,
+      departureDateTime: firstSegment.departureTime.slice(0, 19).replace("T", " "),
+      arrivalDateTime: lastSegment.arrivalTime.slice(0, 19).replace("T", " "),
+      origin: firstSegment.departureStation,
+      destination: lastSegment.arrivalStation,
+      flightNo: `${firstSegment.publishingCarrier.carrierCode} ${firstSegment.publishingCarrier.flightNumber}`,
       duration: row.duration,
-      aircraft: segment.aircraft,
+      aircraft: firstSegment.aircraft,
+      segmentCount: row.segments.length,
       fares: [],
       amenities: {
         hasPods: undefined,
-        hasWiFi: segment.amenities.includes("Wi-Fi"),
+        hasWiFi: row.segments.some((segment) => segment.amenities.includes("Wi-Fi")),
       },
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildResultsUrl, extractAlaskaResponseFromInlineScript, extractAlaskaResponseFromSvelteData, standardizeResults } from "./alaska.js"
+import { buildResultsUrl, extractAlaskaResponseFromInlineScript, extractAlaskaResponseFromSvelteData, inlineResultsScriptPattern, standardizeResults } from "./alaska.js"
 
 const SAMPLE_SVELTE_DATA = [
   JSON.stringify({ type: "data", nodes: [] }),
@@ -128,6 +128,10 @@ describe("alaska scraper helpers", () => {
     expect(response.rows![0]!.solutions["REFUNDABLE_MAIN"]!.atmosPoints).toBe(35000)
   })
 
+  it("accepts inline Svelte resolve scripts regardless of resolve slot index", () => {
+    expect(inlineResultsScriptPattern.test(SAMPLE_INLINE_SCRIPT.replace("resolve(2", "resolve(7"))).toBe(true)
+  })
+
   it("extracts the rows-based Alaska response from SvelteKit __data.json", () => {
     const response = extractAlaskaResponseFromSvelteData(SAMPLE_SVELTE_DATA)
     const row = response.rows![0]!
@@ -151,6 +155,7 @@ describe("alaska scraper helpers", () => {
         flightNo: "AS 811",
         duration: 340,
         aircraft: "Boeing 737-900 (Winglets) Passenger",
+        segmentCount: 1,
         fares: [
           {
             bookingClass: "V",
@@ -167,6 +172,185 @@ describe("alaska scraper helpers", () => {
           hasWiFi: true,
         },
       },
+    ])
+  })
+
+  it("keeps connecting itineraries and preserves segment counts", () => {
+    const response = {
+      departureStation: "SFO",
+      arrivalStation: "HNL",
+      rows: [{
+        id: 1,
+        origin: "SFO",
+        destination: "HNL",
+        duration: 455,
+        matrixOperationalDisclosures: [],
+        segments: [
+          {
+            publishingCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 331 },
+            displayCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 331 },
+            departureStation: "SFO",
+            arrivalStation: "SEA",
+            aircraftCode: "739",
+            aircraft: "Boeing 737-900",
+            duration: 125,
+            departureTime: "2026-07-01T06:00:00-07:00",
+            arrivalTime: "2026-07-01T08:05:00-07:00",
+            nextDayArrival: false,
+            nextDayDeparture: false,
+            performance: [],
+            stopoverInformation: "1h 25m",
+            stopoverDuration: 85,
+            operationalDisclosure: "Operated by Alaska",
+            subjectToGovernmentApproval: false,
+            detailsDisplayOperationalDisclosure: "Operated by Alaska",
+            firstClassUpgradeAvailable: false,
+            firstClassUpgradeUnavailable: false,
+            amenities: ["Wi-Fi"],
+            firstAmenities: [],
+          },
+          {
+            publishingCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 801 },
+            displayCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 801 },
+            departureStation: "SEA",
+            arrivalStation: "HNL",
+            aircraftCode: "73J",
+            aircraft: "Boeing 737-900 (Winglets) Passenger",
+            duration: 245,
+            departureTime: "2026-07-01T09:30:00-07:00",
+            arrivalTime: "2026-07-01T12:35:00-10:00",
+            nextDayArrival: false,
+            nextDayDeparture: false,
+            performance: [],
+            stopoverInformation: "0m",
+            stopoverDuration: 0,
+            operationalDisclosure: "Operated by Alaska",
+            subjectToGovernmentApproval: false,
+            detailsDisplayOperationalDisclosure: "Operated by Alaska",
+            firstClassUpgradeAvailable: false,
+            firstClassUpgradeUnavailable: false,
+            amenities: ["Wi-Fi"],
+            firstAmenities: [],
+          },
+        ],
+        allSegments: [],
+        upgradeInfo: [],
+        solutions: {
+          REFUNDABLE_MAIN: {
+            grandTotal: 5.6,
+            atmosPoints: 45000,
+            seatsRemaining: 6,
+            mixedCabin: false,
+            cabins: ["COACH"],
+            bookingCodes: ["V"],
+            refundable: true,
+            qpxcSolutionID: "solution-1",
+          },
+        },
+        version: "v2.0",
+      }],
+      qpxcSessionID: "session-id",
+      qpxcSolutionSetID: "solution-set-id",
+      advisories: [],
+      columns: ["REFUNDABLE_MAIN"],
+    } as any
+
+    expect(standardizeResults(response, { origin: "SFO", destination: "HNL", departureDate: "2026-07-01" })).toStrictEqual([
+      {
+        departureDateTime: "2026-07-01 06:00:00",
+        arrivalDateTime: "2026-07-01 12:35:00",
+        origin: "SFO",
+        destination: "HNL",
+        flightNo: "AS 331",
+        duration: 455,
+        aircraft: "Boeing 737-900",
+        segmentCount: 2,
+        fares: [
+          {
+            bookingClass: "V",
+            cabin: "economy",
+            cash: 5.6,
+            currencyOfCash: "USD",
+            miles: 45000,
+            scraper: "alaska",
+            isSaverFare: false,
+          },
+        ],
+        amenities: {
+          hasPods: undefined,
+          hasWiFi: true,
+        },
+      },
+    ])
+  })
+
+  it("preserves Alaska FIRST fares as first cabin matches", () => {
+    const response = {
+      departureStation: "SFO",
+      arrivalStation: "JFK",
+      rows: [{
+        id: 2,
+        origin: "SFO",
+        destination: "JFK",
+        duration: 330,
+        matrixOperationalDisclosures: [],
+        segments: [{
+          publishingCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 15 },
+          displayCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 15 },
+          departureStation: "SFO",
+          arrivalStation: "JFK",
+          aircraftCode: "73J",
+          aircraft: "Boeing 737-900ER",
+          duration: 330,
+          departureTime: "2026-07-01T07:00:00-07:00",
+          arrivalTime: "2026-07-01T15:30:00-04:00",
+          nextDayArrival: false,
+          nextDayDeparture: false,
+          performance: [],
+          stopoverInformation: "0m",
+          stopoverDuration: 0,
+          operationalDisclosure: "Operated by Alaska",
+          subjectToGovernmentApproval: false,
+          detailsDisplayOperationalDisclosure: "Operated by Alaska",
+          firstClassUpgradeAvailable: false,
+          firstClassUpgradeUnavailable: false,
+          amenities: ["Wi-Fi"],
+          firstAmenities: [],
+        }],
+        allSegments: [],
+        upgradeInfo: [],
+        solutions: {
+          REFUNDABLE_FIRST: {
+            grandTotal: 19.6,
+            atmosPoints: 95000,
+            seatsRemaining: 2,
+            mixedCabin: false,
+            cabins: ["FIRST"],
+            bookingCodes: ["A"],
+            refundable: true,
+            qpxcSolutionID: "solution-first",
+          },
+        },
+        version: "v2.0",
+      }],
+      qpxcSessionID: "session-id",
+      qpxcSolutionSetID: "solution-set-id",
+      advisories: [],
+      columns: ["REFUNDABLE_FIRST"],
+    } as any
+
+    expect(standardizeResults(response, { origin: "SFO", destination: "JFK", departureDate: "2026-07-01" })).toStrictEqual([
+      expect.objectContaining({
+        flightNo: "AS 15",
+        segmentCount: 1,
+        fares: [
+          expect.objectContaining({
+            cabin: "first",
+            bookingClass: "A",
+            miles: 95000,
+          }),
+        ],
+      }),
     ])
   })
 })

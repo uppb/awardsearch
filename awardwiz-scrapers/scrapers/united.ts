@@ -46,6 +46,7 @@ const standardizeResults = (query: AwardWizQuery, unitedTrip: Trip) => {
       flightNo: `${flight.MarketingCarrier} ${flight.FlightNumber}`,
       duration: flight.TravelMinutes,
       aircraft: flight.EquipmentDisclosures.EquipmentDescription,
+      segmentCount: flight.Connections.length + 1,
       fares: [],
       amenities: {
         hasPods: undefined,         // filled in the JSON

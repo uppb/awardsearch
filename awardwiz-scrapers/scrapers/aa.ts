@@ -70,6 +70,7 @@ const standardizeResults = (slices: Slice[], query: AwardWizQuery): FlightWithFa
       flightNo: `${segment.flight.carrierCode} ${segment.flight.flightNumber}`,
       duration: slice.durationInMinutes,
       aircraft: leg.aircraft.name,
+      segmentCount: slice.segments.length,
       amenities: {
         hasPods: leg.amenities.some((a) => a.includes("lie-flat")),
         hasWiFi: leg.amenities.some((a) => a.includes("wifi"))
