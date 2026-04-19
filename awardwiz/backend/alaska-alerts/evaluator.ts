@@ -52,15 +52,20 @@ export const evaluateOneAlert = async ({ alert, repository, searchAlaska, now }:
   const createNotification = matchEvaluation.hasMatch && (!priorState?.hasMatch || shouldNotifyAgain(alert, priorState, now))
   const bestMatchSummary = matchEvaluation.bestMatchSummary
   const bookingDate = bestMatchSummary?.date ?? matchEvaluation.matchedDates[0]!
+  const allScrapesFailed = scrapeErrors.length > 0 && scrapeErrors.length === searchedDates.length
 
   const state: AlaskaAlertState = {
     alertId: alert.id,
-    hasMatch: matchEvaluation.hasMatch,
-    matchedDates: matchEvaluation.matchedDates,
-    matchingResults: matchEvaluation.matchingResults,
-    bestMatchSummary: matchEvaluation.bestMatchSummary,
-    matchFingerprint: matchEvaluation.matchFingerprint,
-    lastMatchAt: matchEvaluation.hasMatch ? nowIso : priorState?.lastMatchAt,
+    hasMatch: allScrapesFailed && priorState?.hasMatch ? priorState.hasMatch : matchEvaluation.hasMatch,
+    matchedDates: allScrapesFailed && priorState?.hasMatch ? priorState.matchedDates : matchEvaluation.matchedDates,
+    matchingResults: allScrapesFailed && priorState?.hasMatch ? priorState.matchingResults : matchEvaluation.matchingResults,
+    bestMatchSummary: allScrapesFailed && priorState?.hasMatch ? priorState.bestMatchSummary : matchEvaluation.bestMatchSummary,
+    matchFingerprint: allScrapesFailed && priorState?.hasMatch ? priorState.matchFingerprint : matchEvaluation.matchFingerprint,
+    lastMatchAt: allScrapesFailed && priorState?.hasMatch
+      ? priorState.lastMatchAt
+      : matchEvaluation.hasMatch
+        ? nowIso
+        : priorState?.lastMatchAt,
     lastNotifiedAt: priorState?.lastNotifiedAt,
     lastErrorAt: scrapeErrors.length > 0 ? nowIso : undefined,
     lastErrorMessage: scrapeErrors[0],
