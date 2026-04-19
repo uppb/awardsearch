@@ -105,9 +105,6 @@ describe("evaluateOneAlert", () => {
     expect(search).toHaveBeenCalledWith({ origin: "SFO", destination: "HNL", departureDate: "2026-07-01" })
     expect(repo.saveEvaluation).toHaveBeenCalledTimes(1)
     expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
-      alert: expect.objectContaining({
-        id: "alert-1",
-      }),
       state: expect.objectContaining({
         alertId: "alert-1",
         hasMatch: true,
@@ -147,12 +144,19 @@ describe("evaluateOneAlert", () => {
   })
 
   it("creates a Discord-ready notification payload with a bookingUrl for the best match date", async () => {
+    const multiMatchFlights: FlightWithFares[] = [{
+      ...flights[0]!,
+      fares: [
+        { cabin: "business", miles: 80000, cash: 5.6, currencyOfCash: "USD", scraper: "alaska", bookingClass: "D", isSaverFare: false },
+        { cabin: "business", miles: 81000, cash: 6.1, currencyOfCash: "USD", scraper: "alaska", bookingClass: "I", isSaverFare: false },
+      ],
+    }]
     const repo = {
       getState: vi.fn<[], Promise<AlaskaAlertState | undefined>>().mockResolvedValue(undefined),
       saveEvaluation: vi.fn().mockResolvedValue(undefined),
       createNotificationEvent: vi.fn().mockResolvedValue(undefined),
     }
-    const search = vi.fn().mockResolvedValue(flights)
+    const search = vi.fn().mockResolvedValue(multiMatchFlights)
 
     await evaluateOneAlert({
       alert,
@@ -167,7 +171,7 @@ describe("evaluateOneAlert", () => {
         destination: "HNL",
         cabin: "business",
         matchedDates: ["2026-07-01"],
-        matchCount: 1,
+        matchCount: 2,
         nonstopOnly: true,
         maxMiles: 90000,
         maxCash: 10,
@@ -236,9 +240,6 @@ describe("evaluateOneAlert", () => {
 
     expect(repo.createNotificationEvent).not.toHaveBeenCalled()
     expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
-      alert: expect.objectContaining({
-        id: "alert-1",
-      }),
       state: expect.objectContaining({
         lastNotifiedAt: "2026-04-18T05:00:00.000Z",
       }),

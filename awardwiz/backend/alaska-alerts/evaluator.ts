@@ -6,7 +6,7 @@ import type { FlightWithFares } from "../../types/scrapers.js"
 
 export type AlertRepository = {
   getState: (alertId: string) => Promise<AlaskaAlertState | undefined>
-  saveEvaluation: (evaluation: { alert: AlaskaAlert, state: AlaskaAlertState, run: AlaskaAlertRun }) => Promise<void>
+  saveEvaluation: (evaluation: { alert?: AlaskaAlert, state: AlaskaAlertState, run: AlaskaAlertRun }) => Promise<void>
   createNotificationEvent: (event: NotificationEvent) => Promise<void>
 }
 
@@ -95,7 +95,7 @@ export const evaluateOneAlert = async ({ alert, repository, searchAlaska, now }:
       destination: alert.destination,
       cabin: alert.cabin,
       matchedDates: matchEvaluation.matchedDates,
-      matchCount: matchEvaluation.matchedDates.length,
+      matchCount: matchEvaluation.matchingResults.length,
       nonstopOnly: alert.nonstopOnly,
       maxMiles: alert.maxMiles,
       maxCash: alert.maxCash,
@@ -108,7 +108,6 @@ export const evaluateOneAlert = async ({ alert, repository, searchAlaska, now }:
   })
 
   await repository.saveEvaluation({
-    alert,
     state: {
       ...state,
       lastNotifiedAt: nowIso,
