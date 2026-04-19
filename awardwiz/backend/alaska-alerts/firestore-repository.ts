@@ -32,51 +32,37 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     return firestore().runTransaction(async (transaction) => {
       const collection = firestore().collection("notification_events")
 
-      const claimedEvents: NotificationEvent[] = []
-
       const pendingQuery = collection
         .where("status", "==", "pending")
         .limit(limit)
-
       const pendingSnapshot = await transaction.get(pendingQuery)
-      for (const doc of pendingSnapshot.docs) {
+      const pendingDocs = pendingSnapshot.docs.slice(0, limit)
+
+      const remaining = limit - pendingDocs.length
+      let staleDocs: typeof pendingSnapshot.docs = []
+      if (remaining > 0) {
+        const staleProcessingQuery = collection
+          .where("status", "==", "processing")
+          .where("claimedAt", "<=", staleBefore)
+          .limit(remaining)
+        const staleSnapshot = await transaction.get(staleProcessingQuery)
+        staleDocs = staleSnapshot.docs.slice(0, remaining)
+      }
+
+      const claimedEvents = [...pendingDocs, ...staleDocs].map((doc) => {
         const claimToken = randomUUID()
         transaction.update(doc.ref, {
           status: "processing",
           claimedAt,
           claimToken,
         })
-        claimedEvents.push({
+        return {
           ...(doc.data() as NotificationEvent),
           status: "processing",
           claimedAt,
           claimToken,
-        })
-      }
-
-      const remaining = limit - claimedEvents.length
-      if (remaining > 0) {
-        const staleProcessingQuery = collection
-          .where("status", "==", "processing")
-          .where("claimedAt", "<=", staleBefore)
-          .limit(remaining)
-
-        const staleSnapshot = await transaction.get(staleProcessingQuery)
-        for (const doc of staleSnapshot.docs) {
-          const claimToken = randomUUID()
-          transaction.update(doc.ref, {
-            status: "processing",
-            claimedAt,
-            claimToken,
-          })
-          claimedEvents.push({
-            ...(doc.data() as NotificationEvent),
-            status: "processing",
-            claimedAt,
-            claimToken,
-          })
-        }
-      }
+        } satisfies NotificationEvent
+      })
 
       return claimedEvents
     })
