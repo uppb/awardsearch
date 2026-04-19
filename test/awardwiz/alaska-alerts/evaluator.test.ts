@@ -31,6 +31,7 @@ const alert: AlaskaAlert = {
   pollIntervalMinutes: 60,
   minNotificationIntervalMinutes: 180,
   lastCheckedAt: undefined,
+  nextCheckAt: undefined,
   createdAt: "2026-04-18T00:00:00.000Z",
   updatedAt: "2026-04-18T00:00:00.000Z",
 }
@@ -105,6 +106,7 @@ describe("evaluateOneAlert", () => {
     expect(search).toHaveBeenCalledWith({ origin: "SFO", destination: "HNL", departureDate: "2026-07-01" })
     expect(repo.saveEvaluation).toHaveBeenCalledTimes(1)
     expect(repo.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      alert,
       state: expect.objectContaining({
         alertId: "alert-1",
         hasMatch: true,

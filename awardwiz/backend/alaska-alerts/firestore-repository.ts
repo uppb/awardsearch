@@ -1,4 +1,5 @@
 import admin from "firebase-admin"
+import dayjs from "dayjs"
 import { randomUUID } from "node:crypto"
 import { getFirebaseAdminApp } from "./firebase-admin.js"
 import type { AlaskaAlert, AlaskaAlertRun, AlaskaAlertState, NotificationEvent } from "./types.js"
@@ -12,13 +13,14 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     return doc.exists ? doc.data() as AlaskaAlertState : undefined
   }
 
-  async saveEvaluation({ alert, state, run }: { alert?: AlaskaAlert, state: AlaskaAlertState, run: AlaskaAlertRun }) {
-    const alertId = alert?.id ?? state.alertId
+  async saveEvaluation({ alert, state, run }: { alert: AlaskaAlert, state: AlaskaAlertState, run: AlaskaAlertRun }) {
+    const alertId = alert.id
     const batch = firestore().batch()
     batch.set(firestore().collection("alaska_alert_state").doc(alertId), state)
     batch.set(firestore().collection("alaska_alert_runs").doc(run.id), run)
     batch.update(firestore().collection("alaska_alerts").doc(alertId), {
       lastCheckedAt: state.updatedAt,
+      nextCheckAt: dayjs(state.updatedAt).add(alert.pollIntervalMinutes, "minute").toISOString(),
       updatedAt: state.updatedAt,
     })
     await batch.commit()

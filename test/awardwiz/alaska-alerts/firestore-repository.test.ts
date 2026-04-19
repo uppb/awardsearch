@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { NotificationEvent } from "../../../awardwiz/backend/alaska-alerts/types.js"
+import type { AlaskaAlert, AlaskaAlertRun, AlaskaAlertState, NotificationEvent } from "../../../awardwiz/backend/alaska-alerts/types.js"
 
 const DELETE_FIELD = Symbol("firestore-delete")
 
@@ -106,6 +106,22 @@ class FakeFirestore {
     return new FakeCollectionRef(this.collections.get(name)!)
   }
 
+  batch() {
+    const writes: Array<() => Promise<void>> = []
+    return {
+      set: (docRef: FakeDocRef, value: StoredDoc) => {
+        writes.push(() => docRef.set(value))
+      },
+      update: (docRef: FakeDocRef, value: StoredDoc) => {
+        writes.push(() => docRef.update(value))
+      },
+      commit: async () => {
+        for (const write of writes)
+          await write()
+      },
+    }
+  }
+
   async runTransaction<T>(callback: (transaction: {
     get: (target: FakeDocRef | FakeQuery) => Promise<FakeDocSnapshot | FakeQuerySnapshot>
     set: (docRef: FakeDocRef, value: StoredDoc) => void
@@ -175,6 +191,29 @@ const buildEvent = (overrides: Partial<NotificationEvent> = {}): NotificationEve
   ...overrides,
 })
 
+const buildAlert = (overrides: Partial<AlaskaAlert> = {}): AlaskaAlert => ({
+  id: "alert-1",
+  userId: "user-1",
+  origin: "SFO",
+  destination: "HNL",
+  dateMode: "single_date",
+  date: "2026-07-01",
+  startDate: undefined,
+  endDate: undefined,
+  cabin: "business",
+  nonstopOnly: true,
+  maxMiles: 90000,
+  maxCash: 10,
+  active: true,
+  pollIntervalMinutes: 90,
+  minNotificationIntervalMinutes: 180,
+  lastCheckedAt: undefined,
+  nextCheckAt: undefined,
+  createdAt: "2026-04-18T00:00:00.000Z",
+  updatedAt: "2026-04-18T00:00:00.000Z",
+  ...overrides,
+})
+
 describe("FirestoreAlaskaAlertsRepository", () => {
   beforeEach(() => {
     fakeFirestore.reset()
@@ -237,5 +276,50 @@ describe("FirestoreAlaskaAlertsRepository", () => {
     }))
     expect(staleAfterCleanup.data()).not.toHaveProperty("claimedAt")
     expect(staleAfterCleanup.data()).not.toHaveProperty("claimToken")
+  })
+
+  it("stores nextCheckAt when persisting an alert evaluation", async () => {
+    const repository = new FirestoreAlaskaAlertsRepository()
+    const alert = buildAlert({
+      id: "alert-next-check",
+      pollIntervalMinutes: 90,
+    })
+    const state: AlaskaAlertState = {
+      alertId: alert.id,
+      hasMatch: false,
+      matchedDates: [],
+      matchingResults: [],
+      bestMatchSummary: undefined,
+      matchFingerprint: "fp-1",
+      lastMatchAt: undefined,
+      lastNotifiedAt: undefined,
+      lastErrorAt: undefined,
+      lastErrorMessage: undefined,
+      updatedAt: "2026-04-18T06:00:00.000Z",
+    }
+    const run: AlaskaAlertRun = {
+      id: "run-1",
+      alertId: alert.id,
+      startedAt: "2026-04-18T06:00:00.000Z",
+      completedAt: "2026-04-18T06:00:00.000Z",
+      searchedDates: ["2026-07-01"],
+      scrapeCount: 1,
+      scrapeSuccessCount: 1,
+      scrapeErrorCount: 0,
+      matchedResultCount: 0,
+      hasMatch: false,
+      errorSummary: undefined,
+    }
+
+    await fakeFirestore.collection("alaska_alerts").doc(alert.id).set(alert as unknown as StoredDoc)
+
+    await repository.saveEvaluation({ alert, state, run })
+
+    const storedAlert = await fakeFirestore.collection("alaska_alerts").doc(alert.id).get()
+    expect(storedAlert.data()).toEqual(expect.objectContaining({
+      lastCheckedAt: "2026-04-18T06:00:00.000Z",
+      updatedAt: "2026-04-18T06:00:00.000Z",
+      nextCheckAt: "2026-04-18T07:30:00.000Z",
+    }))
   })
 })

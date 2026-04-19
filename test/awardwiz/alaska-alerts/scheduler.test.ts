@@ -1,0 +1,195 @@
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { AlaskaAlert } from "../../../awardwiz/backend/alaska-alerts/types.js"
+
+type StoredDoc = Record<string, unknown>
+
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
+
+class FakeDocSnapshot {
+  constructor(readonly id: string, private readonly value: StoredDoc | undefined) {}
+
+  data() {
+    return this.value === undefined ? undefined : clone(this.value)
+  }
+}
+
+class FakeQuerySnapshot {
+  constructor(readonly docs: FakeDocSnapshot[]) {}
+}
+
+class FakeQuery {
+  constructor(
+    protected readonly store: Map<string, StoredDoc>,
+    private readonly filters: Array<{ field: string, operator: "==" | "<=", value: unknown }> = [],
+    private readonly orderings: Array<{ field: string, direction: "asc" | "desc" }> = [],
+    private readonly maxResults = Number.POSITIVE_INFINITY,
+  ) {}
+
+  where(field: string, operator: "==" | "<=", value: unknown) {
+    return new FakeQuery(this.store, [...this.filters, { field, operator, value }], this.orderings, this.maxResults)
+  }
+
+  orderBy(field: string, direction: "asc" | "desc" = "asc") {
+    return new FakeQuery(this.store, this.filters, [...this.orderings, { field, direction }], this.maxResults)
+  }
+
+  limit(maxResults: number) {
+    return new FakeQuery(this.store, this.filters, this.orderings, maxResults)
+  }
+
+  async get() {
+    return this.execute()
+  }
+
+  async execute() {
+    const docs = Array.from(this.store.entries())
+      .filter(([, value]) => this.filters.every(({ field, operator, value: expectedValue }) => {
+        const actualValue = value[field]
+        if (operator === "==")
+          return actualValue === expectedValue
+        return typeof actualValue === "string" && typeof expectedValue === "string" && actualValue <= expectedValue
+      }))
+      .sort(([leftId, leftValue], [rightId, rightValue]) => {
+        for (const { field, direction } of this.orderings) {
+          const left = leftValue[field]
+          const right = rightValue[field]
+          if (left === right)
+            continue
+
+          const comparison = `${left ?? ""}`.localeCompare(`${right ?? ""}`)
+          return direction === "asc" ? comparison : -comparison
+        }
+        return leftId.localeCompare(rightId)
+      })
+      .slice(0, this.maxResults)
+      .map(([id, value]) => new FakeDocSnapshot(id, value))
+
+    return new FakeQuerySnapshot(docs)
+  }
+}
+
+class FakeCollectionRef extends FakeQuery {
+  constructor(protected override readonly store: Map<string, StoredDoc>) {
+    super(store)
+  }
+
+  doc(id: string) {
+    return {
+      set: async (value: StoredDoc) => {
+        this.store.set(id, clone(value))
+      },
+    }
+  }
+}
+
+class FakeFirestore {
+  private readonly collections = new Map<string, Map<string, StoredDoc>>()
+
+  reset() {
+    this.collections.clear()
+  }
+
+  collection(name: string) {
+    if (!this.collections.has(name))
+      this.collections.set(name, new Map())
+    return new FakeCollectionRef(this.collections.get(name)!)
+  }
+}
+
+const fakeFirestore = new FakeFirestore()
+
+vi.mock("firebase-admin", () => ({
+  default: {
+    firestore: vi.fn(() => fakeFirestore),
+  },
+}))
+
+vi.mock("../../../awardwiz/backend/alaska-alerts/firebase-admin.js", () => ({
+  getFirebaseAdminApp: vi.fn(() => ({ name: "test-app" })),
+}))
+
+const { listDueAlerts } = await import("../../../awardwiz/backend/alaska-alerts/scheduler.js")
+
+const buildAlert = (overrides: Partial<AlaskaAlert> = {}): AlaskaAlert => ({
+  id: "alert-1",
+  userId: "user-1",
+  origin: "SFO",
+  destination: "HNL",
+  dateMode: "single_date",
+  date: "2026-07-01",
+  startDate: undefined,
+  endDate: undefined,
+  cabin: "business",
+  nonstopOnly: true,
+  maxMiles: 90000,
+  maxCash: 10,
+  active: true,
+  pollIntervalMinutes: 60,
+  minNotificationIntervalMinutes: 180,
+  lastCheckedAt: undefined,
+  nextCheckAt: undefined,
+  createdAt: "2026-04-18T00:00:00.000Z",
+  updatedAt: "2026-04-18T00:00:00.000Z",
+  ...overrides,
+})
+
+describe("listDueAlerts", () => {
+  beforeEach(() => {
+    fakeFirestore.reset()
+  })
+
+  it("queries active due alerts by nextCheckAt order and limit", async () => {
+    await fakeFirestore.collection("alaska_alerts").doc("due-1").set(buildAlert({
+      id: "due-1",
+      nextCheckAt: "2026-04-18T05:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("due-2").set(buildAlert({
+      id: "due-2",
+      nextCheckAt: "2026-04-18T05:30:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("future").set(buildAlert({
+      id: "future",
+      nextCheckAt: "2026-04-18T07:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("inactive").set(buildAlert({
+      id: "inactive",
+      active: false,
+      nextCheckAt: "2026-04-18T04:00:00.000Z",
+    }) as unknown as StoredDoc)
+
+    const dueAlerts = await listDueAlerts(new Date("2026-04-18T06:00:00.000Z"), {
+      limit: 1,
+      migrationFallbackLimit: 0,
+    })
+
+    expect(dueAlerts.map((alert) => alert.id)).toEqual(["due-1"])
+  })
+
+  it("uses a bounded fallback for active alerts missing nextCheckAt", async () => {
+    await fakeFirestore.collection("alaska_alerts").doc("fallback-1").set(buildAlert({
+      id: "fallback-1",
+      lastCheckedAt: "2026-04-18T01:00:00.000Z",
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T01:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("fallback-2").set(buildAlert({
+      id: "fallback-2",
+      lastCheckedAt: undefined,
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T02:00:00.000Z",
+    }) as unknown as StoredDoc)
+    await fakeFirestore.collection("alaska_alerts").doc("fallback-3").set(buildAlert({
+      id: "fallback-3",
+      lastCheckedAt: "2026-04-18T00:30:00.000Z",
+      nextCheckAt: undefined,
+      updatedAt: "2026-04-18T03:00:00.000Z",
+    }) as unknown as StoredDoc)
+
+    const dueAlerts = await listDueAlerts(new Date("2026-04-18T06:00:00.000Z"), {
+      limit: 10,
+      migrationFallbackLimit: 2,
+    })
+
+    expect(dueAlerts.map((alert) => alert.id)).toEqual(["fallback-1", "fallback-2"])
+  })
+})

@@ -29,6 +29,7 @@ export type AlaskaAlert = {
   pollIntervalMinutes: number
   minNotificationIntervalMinutes: number
   lastCheckedAt: string | undefined
+  nextCheckAt?: string | undefined
   createdAt: string
   updatedAt: string
 }
