@@ -3,7 +3,7 @@ import type { NotificationEvent } from "./types.js"
 export type NotificationRepository = {
   markNotificationAttempting: (id: string, attemptedAt: string) => Promise<void>
   markNotificationSent: (id: string, sentAt: string) => Promise<void>
-  markNotificationPending: (id: string, reason: string) => Promise<void>
+  markNotificationDeliveredUnconfirmed: (id: string, reason: string) => Promise<void>
   markNotificationFailed: (id: string, reason: string) => Promise<void>
 }
 
@@ -20,8 +20,6 @@ export type DiscordWebhookFetch = (input: string, init: {
 }) => Promise<DiscordWebhookResponse>
 
 const formatLimit = (value: number | undefined, label: string) => value === undefined ? `Any ${label}` : `${value.toLocaleString()} ${label}`
-
-const isRetryableDiscordStatus = (status: number) => status === 429 || status >= 500
 
 const safeResponseText = async (response: DiscordWebhookResponse) => {
   try {
@@ -85,11 +83,11 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
   username?: string
   avatarUrl?: string
 }) => {
-  const recordRetryableFailure = async (reason: string) => {
+  const recordAmbiguousFailure = async (reason: string) => {
     try {
-      await repository.markNotificationPending(event.id, reason)
+      await repository.markNotificationDeliveredUnconfirmed(event.id, reason)
     } catch {
-      // Best effort: keep the notifier moving even if the requeue write fails.
+      // Best effort: keep the notifier moving even if the terminal write fails.
     }
   }
 
@@ -119,8 +117,8 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
     if (!response.ok) {
       const responseText = await safeResponseText(response)
       const reason = `Discord webhook request failed with status ${response.status}: ${responseText}`
-      if (isRetryableDiscordStatus(response.status))
-        await recordRetryableFailure(reason)
+      if (response.status === 429 || response.status >= 500)
+        await recordAmbiguousFailure(`At-most-once: ${reason}`)
       else
         await recordPermanentFailure(reason)
       return
@@ -128,11 +126,10 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
 
     try {
       await repository.markNotificationSent(event.id, now.toISOString())
-    } catch {
-      // Do not requeue or fail after Discord accepted the message. Leave the event
-      // in attempting so it will not be resent.
+    } catch (error) {
+      await recordAmbiguousFailure(`At-most-once: Discord accepted the webhook but sent-status persistence failed: ${(error as Error).message}`)
     }
   } catch (error) {
-    await recordRetryableFailure(`Discord webhook request failed: ${(error as Error).message}`)
+    await recordAmbiguousFailure(`At-most-once: Discord webhook delivery may have started but failed before confirmation: ${(error as Error).message}`)
   }
 }

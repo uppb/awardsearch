@@ -83,21 +83,21 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     })
   }
 
+  async markNotificationDeliveredUnconfirmed(id: string, reason: string) {
+    await firestore().collection("notification_events").doc(id).update({
+      status: "delivered_unconfirmed",
+      sentAt: admin.firestore.FieldValue.delete(),
+      claimedAt: admin.firestore.FieldValue.delete(),
+      failureReason: reason,
+    })
+  }
+
   async markNotificationSent(id: string, sentAt: string) {
     await firestore().collection("notification_events").doc(id).update({
       status: "sent",
       sentAt,
       claimedAt: admin.firestore.FieldValue.delete(),
       failureReason: admin.firestore.FieldValue.delete(),
-    })
-  }
-
-  async markNotificationPending(id: string, reason: string) {
-    await firestore().collection("notification_events").doc(id).update({
-      status: "pending",
-      sentAt: admin.firestore.FieldValue.delete(),
-      claimedAt: admin.firestore.FieldValue.delete(),
-      failureReason: reason,
     })
   }
 
