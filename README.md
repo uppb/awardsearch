@@ -153,7 +153,7 @@ Optional for the browser app:
 
 ### Workers
 
-- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators, and by the Alaska evaluator / Firestore repository path when not using emulators.
+- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators, and by the Alaska evaluator / notifier Firestore repository path when not using emulators or the Firebase emulators.
 - `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
 - `DISCORD_WEBHOOK_URL`: Required by `awardwiz/workers/alaska-alerts-notifier.ts`.
 - `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/alaska-alerts-notifier.ts`.
@@ -187,7 +187,7 @@ The marked-fares flow is implemented, but it is not a general-purpose finished f
 
 There is also an in-progress backend-only Alaska alert path:
 
-- `awardwiz/workers/alaska-alerts-evaluator.ts` evaluates due Alaska alerts and writes alert state plus notification events for matching Alaska alerts.
+- `awardwiz/workers/alaska-alerts-evaluator.ts` updates alert state and run records for due Alaska alerts, and emits notification events when a matching alert is eligible to notify again.
 - `awardwiz/workers/alaska-alerts-notifier.ts` posts those pending notification events to a shared Discord webhook.
 - Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
 - Each Discord alert includes the generic Alaska booking results link for the best matched date.
