@@ -81,9 +81,8 @@ export type NotificationEvent = {
   alertId: string
   userId: string
   createdAt: string
-  status: "pending" | "processing" | "sent" | "failed"
+  status: "pending" | "processing" | "attempting" | "sent" | "failed"
   claimedAt?: string
-  deliveryAttemptedAt?: string
   payload: {
     origin: string
     destination: string

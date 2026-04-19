@@ -54,7 +54,6 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       if (remaining > 0) {
         const staleProcessingQuery = collection
           .where("status", "==", "processing")
-          .where("deliveryAttemptedAt", "==", null)
           .where("claimedAt", "<=", staleBefore)
           .limit(remaining)
 
@@ -76,9 +75,11 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     })
   }
 
-  async markNotificationDeliveryAttempted(id: string, attemptedAt: string) {
+  async markNotificationAttempting(id: string, attemptedAt: string) {
     await firestore().collection("notification_events").doc(id).update({
-      deliveryAttemptedAt: attemptedAt,
+      status: "attempting",
+      sentAt: admin.firestore.FieldValue.delete(),
+      failureReason: admin.firestore.FieldValue.delete(),
     })
   }
 
@@ -87,7 +88,6 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "sent",
       sentAt,
       claimedAt: admin.firestore.FieldValue.delete(),
-      deliveryAttemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: admin.firestore.FieldValue.delete(),
     })
   }
@@ -97,7 +97,6 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
       status: "pending",
       sentAt: admin.firestore.FieldValue.delete(),
       claimedAt: admin.firestore.FieldValue.delete(),
-      deliveryAttemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }
@@ -106,7 +105,6 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
     await firestore().collection("notification_events").doc(id).update({
       status: "failed",
       claimedAt: admin.firestore.FieldValue.delete(),
-      deliveryAttemptedAt: admin.firestore.FieldValue.delete(),
       failureReason: reason,
     })
   }

@@ -1,7 +1,7 @@
 import type { NotificationEvent } from "./types.js"
 
 export type NotificationRepository = {
-  markNotificationDeliveryAttempted: (id: string, attemptedAt: string) => Promise<void>
+  markNotificationAttempting: (id: string, attemptedAt: string) => Promise<void>
   markNotificationSent: (id: string, sentAt: string) => Promise<void>
   markNotificationPending: (id: string, reason: string) => Promise<void>
   markNotificationFailed: (id: string, reason: string) => Promise<void>
@@ -102,12 +102,12 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
   }
 
   try {
-    try {
-      await repository.markNotificationDeliveryAttempted(event.id, now.toISOString())
-    } catch {
-      // Best effort only. If this write fails, the event remains reclaimable.
-    }
+    await repository.markNotificationAttempting(event.id, now.toISOString())
+  } catch {
+    return
+  }
 
+  try {
     const response = await fetchFn(webhookUrl, {
       method: "POST",
       headers: {
@@ -130,7 +130,7 @@ export const sendNotificationEvent = async ({ event, repository, now, webhookUrl
       await repository.markNotificationSent(event.id, now.toISOString())
     } catch {
       // Do not requeue or fail after Discord accepted the message. Leave the event
-      // in processing/attempted so it will not be resent.
+      // in attempting so it will not be resent.
     }
   } catch (error) {
     await recordRetryableFailure(`Discord webhook request failed: ${(error as Error).message}`)
