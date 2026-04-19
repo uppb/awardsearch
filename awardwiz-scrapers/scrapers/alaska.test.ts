@@ -353,4 +353,90 @@ describe("alaska scraper helpers", () => {
       }),
     ])
   })
+
+  it("preserves distinct fares in the same cabin when cash and miles trade off", () => {
+    const response = {
+      departureStation: "SFO",
+      arrivalStation: "HNL",
+      rows: [{
+        id: 3,
+        origin: "SFO",
+        destination: "HNL",
+        duration: 340,
+        matrixOperationalDisclosures: [],
+        segments: [{
+          publishingCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 811 },
+          displayCarrier: { carrierCode: "AS", carrierFullName: "Alaska Airlines", flightNumber: 811 },
+          departureStation: "SFO",
+          arrivalStation: "HNL",
+          aircraftCode: "73J",
+          aircraft: "Boeing 737-900ER",
+          duration: 340,
+          departureTime: "2026-07-01T08:30:00-07:00",
+          arrivalTime: "2026-07-01T11:10:00-10:00",
+          nextDayArrival: false,
+          nextDayDeparture: false,
+          performance: [],
+          stopoverInformation: "0m",
+          stopoverDuration: 0,
+          operationalDisclosure: "Operated by Alaska",
+          subjectToGovernmentApproval: false,
+          detailsDisplayOperationalDisclosure: "Operated by Alaska",
+          firstClassUpgradeAvailable: false,
+          firstClassUpgradeUnavailable: false,
+          amenities: ["Wi-Fi"],
+          firstAmenities: [],
+        }],
+        allSegments: [],
+        upgradeInfo: [],
+        solutions: {
+          REFUNDABLE_FIRST_LOW_MILES: {
+            grandTotal: 30,
+            atmosPoints: 80000,
+            seatsRemaining: 2,
+            mixedCabin: false,
+            cabins: ["FIRST"],
+            bookingCodes: ["J"],
+            refundable: true,
+            qpxcSolutionID: "solution-first-low-miles",
+          },
+          REFUNDABLE_FIRST_LOW_CASH: {
+            grandTotal: 5,
+            atmosPoints: 90000,
+            seatsRemaining: 2,
+            mixedCabin: false,
+            cabins: ["FIRST"],
+            bookingCodes: ["D"],
+            refundable: true,
+            qpxcSolutionID: "solution-first-low-cash",
+          },
+        },
+        version: "v2.0",
+      }],
+      qpxcSessionID: "session-id",
+      qpxcSolutionSetID: "solution-set-id",
+      advisories: [],
+      columns: ["REFUNDABLE_FIRST_LOW_MILES", "REFUNDABLE_FIRST_LOW_CASH"],
+    } as any
+
+    expect(standardizeResults(response, { origin: "SFO", destination: "HNL", departureDate: "2026-07-01" })).toStrictEqual([
+      expect.objectContaining({
+        flightNo: "AS 811",
+        fares: expect.arrayContaining([
+          expect.objectContaining({
+            cabin: "first",
+            bookingClass: "J",
+            miles: 80000,
+            cash: 30,
+          }),
+          expect.objectContaining({
+            cabin: "first",
+            bookingClass: "D",
+            miles: 90000,
+            cash: 5,
+          }),
+        ]),
+      }),
+    ])
+  })
 })

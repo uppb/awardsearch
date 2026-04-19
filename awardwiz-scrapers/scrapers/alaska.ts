@@ -244,15 +244,15 @@ export const standardizeResults = (raw: AlaskaResponse, query: AwardWizQuery): F
         isSaverFare: isSaverFare(fareKey, fare.cabins),
       }
 
-      const existingForCabin = result.fares.find((existingFare) => existingFare.cabin === fareToAdd.cabin)
-      if (existingForCabin) {
-        if (fareToAdd.miles < existingForCabin.miles) {
-          result.fares = result.fares.filter((existingFare) => existingFare !== existingForCabin)
-          result.fares.push(fareToAdd)
-        }
-      } else {
+      const existingFare = result.fares.find((currentFare) =>
+        currentFare.cabin === fareToAdd.cabin
+        && currentFare.miles === fareToAdd.miles
+        && currentFare.cash === fareToAdd.cash
+        && currentFare.bookingClass === fareToAdd.bookingClass
+      )
+
+      if (!existingFare)
         result.fares.push(fareToAdd)
-      }
     }
 
     results.push(result)

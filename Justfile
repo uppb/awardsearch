@@ -61,7 +61,11 @@ run-marked-fares-worker:
   npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/marked-fares.ts
 
 run-alaska-alerts-evaluator:
-  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts
+  if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
+    CHROME_PATH="${CHROME_PATH:-/usr/sbin/chromium}" xvfb-run -a npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
+  else \
+    npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
+  fi
 
 run-alaska-alerts-notifier:
   npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-notifier.ts
