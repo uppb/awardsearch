@@ -60,6 +60,12 @@ gen-frontend-dist:
 run-marked-fares-worker:
   npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/marked-fares.ts
 
+run-alaska-alerts-evaluator:
+  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts
+
+run-alaska-alerts-notifier:
+  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-notifier.ts
+
 ##############################
 # SCRAPERS
 ##############################
