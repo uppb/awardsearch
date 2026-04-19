@@ -45,16 +45,6 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
         .where("claimedAt", "<=", staleBefore)
         .limit(limit)
       const staleAttemptingSnapshot = await transaction.get(staleAttemptingQuery)
-      for (const doc of staleAttemptingSnapshot.docs) {
-        transaction.update(doc.ref, {
-          status: "delivered_unconfirmed",
-          sentAt: admin.firestore.FieldValue.delete(),
-          claimedAt: admin.firestore.FieldValue.delete(),
-          claimToken: admin.firestore.FieldValue.delete(),
-          attemptedAt: admin.firestore.FieldValue.delete(),
-          failureReason: `At-most-once: stale attempting event was finalized without retry after worker interruption (claimed before ${staleBefore}).`,
-        })
-      }
 
       const staleProcessingQuery = collection
         .where("status", "==", "processing")
@@ -68,6 +58,17 @@ export class FirestoreAlaskaAlertsRepository implements AlertRepository {
         .limit(Math.max(0, limit - staleDocs.length))
       const pendingSnapshot = await transaction.get(pendingQuery)
       const pendingDocs = pendingSnapshot.docs.slice(0, Math.max(0, limit - staleDocs.length))
+
+      for (const doc of staleAttemptingSnapshot.docs) {
+        transaction.update(doc.ref, {
+          status: "delivered_unconfirmed",
+          sentAt: admin.firestore.FieldValue.delete(),
+          claimedAt: admin.firestore.FieldValue.delete(),
+          claimToken: admin.firestore.FieldValue.delete(),
+          attemptedAt: admin.firestore.FieldValue.delete(),
+          failureReason: `At-most-once: stale attempting event was finalized without retry after worker interruption (claimed before ${staleBefore}).`,
+        })
+      }
 
       const claimedEvents = [...staleDocs, ...pendingDocs].map((doc) => {
         const claimToken = randomUUID()

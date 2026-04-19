@@ -62,7 +62,7 @@ run-marked-fares-worker:
 
 run-alaska-alerts-evaluator:
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
-    CHROME_PATH="${CHROME_PATH:-/usr/sbin/chromium}" xvfb-run -a npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
+    CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || printf '%s' /usr/sbin/chromium)}" xvfb-run -a npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
   else \
     npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
   fi
@@ -81,7 +81,7 @@ run-server: build
 # ⭐️ starts a scraper locally (uses xvfb-run automatically when no DISPLAY is available)
 run-scraper scraper origin destination date: build
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
-    CHROME_PATH="${CHROME_PATH:-/usr/sbin/chromium}" xvfb-run -a node --enable-source-maps dist/awardwiz-scrapers/main-debug.js {{scraper}} {{origin}} {{destination}} {{date}}; \
+    CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || printf '%s' /usr/sbin/chromium)}" xvfb-run -a node --enable-source-maps dist/awardwiz-scrapers/main-debug.js {{scraper}} {{origin}} {{destination}} {{date}}; \
   else \
     node --enable-source-maps dist/awardwiz-scrapers/main-debug.js {{scraper}} {{origin}} {{destination}} {{date}}; \
   fi
