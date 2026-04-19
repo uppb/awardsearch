@@ -37,6 +37,7 @@ stats.html
 node_modules/
 dist/
 tmp/
+.worktrees/
 .env*
 .eslintcache
 .DS_Store
