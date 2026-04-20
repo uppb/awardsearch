@@ -144,6 +144,7 @@ Notes:
 
 - patch fields are partial
 - only `userId`, `maxMiles`, and `maxCash` are clearable with `null`
+- for date scope, either provide `date`, or provide both `startDate` and `endDate`, or omit all date fields to preserve the existing scope
 - changing date scope is done by setting the new date fields you want, not by clearing with `null`
 - empty `{}` bodies are rejected at the HTTP boundary
 

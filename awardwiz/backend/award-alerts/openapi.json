@@ -450,7 +450,8 @@
       },
       "AwardAlertPatchInput": {
         "type": "object",
-        "description": "Non-empty JSON object required. `userId`, `maxMiles`, and `maxCash` may be cleared with `null`.",
+        "description": "Non-empty JSON object required. `userId`, `maxMiles`, and `maxCash` may be cleared with `null`. For date scope, provide `date`, or provide both `startDate` and `endDate`, or omit date fields entirely to preserve the existing scope.",
+        "minProperties": 1,
         "properties": {
           "userId": { "type": ["string", "null"] },
           "origin": { "type": "string" },
@@ -465,7 +466,37 @@
           "pollIntervalMinutes": { "type": "integer", "minimum": 1 },
           "minNotificationIntervalMinutes": { "type": "integer", "minimum": 1 },
           "active": { "type": "boolean" }
-        }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "required": ["date"],
+                "not": {
+                  "anyOf": [
+                    { "required": ["startDate"] },
+                    { "required": ["endDate"] }
+                  ]
+                }
+              },
+              {
+                "required": ["startDate", "endDate"],
+                "not": {
+                  "required": ["date"]
+                }
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    { "required": ["date"] },
+                    { "required": ["startDate"] },
+                    { "required": ["endDate"] }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "AwardAlert": {
         "oneOf": [
