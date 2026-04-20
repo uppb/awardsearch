@@ -293,7 +293,7 @@ Optional for Discord formatting:
 Required for local development only:
 
 - Chromium or Chrome available to `chrome-launcher`
-- `CHROME_PATH` when autodiscovery is not enough
+- `CHROME_PATH` only when autodiscovery is not enough
 - `xvfb-run` or another display solution on headless Linux
 
 Important operational assumption:

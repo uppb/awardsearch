@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
   && rm -rf /var/lib/apt/lists/*
 
-ENV CHROME_PATH=/ms-playwright/chromium-1208/chrome-linux/chrome
 ENV DATABASE_PATH=/data/award-alerts.sqlite
 ENV AWARD_ALERTS_PORT=2233
 ENV PORT=2233
