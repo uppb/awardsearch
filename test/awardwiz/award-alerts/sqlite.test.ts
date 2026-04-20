@@ -144,7 +144,7 @@ describe("openAwardAlertsDb", () => {
             alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'attempting', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
+            status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
             claimed_at TEXT,
             claim_token TEXT,
             attempted_at TEXT,
