@@ -51,11 +51,15 @@ describe("runCli", () => {
       "--nonstop-only",
       "--max-miles", "90000",
       "--max-cash", "10.5",
-      "--poll-interval-minutes", "30",
-      "--min-notification-interval-minutes", "120",
     ])).resolves.toBe(0)
 
     expect(harness.stdout.join("\n")).toContain("Created alert alert-test-id")
+
+    const createdAlert = harness.repository.getAlert("alert-test-id")
+    expect(createdAlert).toMatchObject({
+      pollIntervalMinutes: 1,
+      minNotificationIntervalMinutes: 10,
+    })
 
     harness.stdout.length = 0
     await expect(harness.run(["list"])).resolves.toBe(0)

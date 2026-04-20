@@ -17,8 +17,8 @@ export type AwardAlertsCliDeps = {
 }
 
 const defaultDatabasePath = "./tmp/award-alerts.sqlite"
-const defaultPollIntervalMinutes = 30
-const defaultMinNotificationIntervalMinutes = 60
+const defaultPollIntervalMinutes = 1
+const defaultMinNotificationIntervalMinutes = 10
 const validDatePattern = /^\d{4}-\d{2}-\d{2}$/
 const nonNegativeIntegerPattern = /^(0|[1-9]\d*)$/
 const nonNegativeNumberPattern = /^(0|[1-9]\d*)(\.\d+)?$/

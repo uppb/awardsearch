@@ -29,7 +29,7 @@ This README is for developers working on the codebase. It describes what is impl
 - Marked-fare notifications exist, but the worker is still effectively beta-only: it hardcodes a `BETA_USERS` allowlist and only reacts to saver-availability changes.
 - The SQLite award-alert backend is backend-only and CLI-managed; there is no user-facing CRUD/API surface yet.
 - Auth is required for normal frontend scraper calls unless you provide `VITE_SCRAPERS_TOKEN`.
-- The repo has unit coverage for the search-merging pipeline and a scaffold for live scraper tests, but the live scraper suite is currently commented out.
+- The repo has unit coverage for the search-merging pipeline, and some live scraper/debug workflows still exist, but there is no maintained always-on live scraper test suite in this branch.
 
 ## Enabled Scrapers
 
@@ -52,13 +52,14 @@ Defined but currently disabled in `config.json`:
 ## Repo Layout
 
 - `awardwiz/`: React frontend, shared search pipeline, Firebase integration, workers, and static assets.
-- `awardwiz/backend/alaska-alerts/`: legacy Alaska-specific alert code still present during the migration.
 - `awardwiz/backend/award-alerts/`: generic SQLite-backed alert backend, CLI, scheduler, evaluator, notifier, and provider adapters.
 - `awardwiz-scrapers/`: scraper server, CLI debug entry point, scraper modules, and typed airline response shapes.
 - `arkalis/`: internal Chromium/CDP automation layer used by the scrapers.
 - `test/awardwiz/`: stub-driven tests for route discovery and result merging.
 - `docs/`: implementation notes for specific parts of the system.
 - `config.json`: the runtime scraper catalog and airline rules.
+
+The old `awardwiz/backend/alaska-alerts/` boundary has been retired and removed. Active Alaska provider logic now lives under `awardwiz/backend/award-alerts/providers/alaska/`.
 
 ## Search Pipeline
 
@@ -197,10 +198,11 @@ The newer `award-alerts` backend is separate from marked fares:
   - `just award-alerts-cli list`
   - `just award-alerts-cli create --program alaska --user-id user-1 --origin SFO --destination HNL --date 2026-07-01 --cabin business`
   - `just award-alerts-cli show <alert-id>`
+- New alerts default to `poll_interval_minutes=1` and `min_notification_interval_minutes=10` unless explicitly overridden at creation time.
 - The evaluator worker claims due alerts from SQLite, runs provider-specific search/match logic, and enqueues pending Discord notification events.
 - The notifier worker claims pending notification events from SQLite and posts them to one shared Discord webhook.
 - Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
-- Persistent server execution is the intended production model for this service. Set `DATABASE_PATH` to a persistent host path for that runtime; the default `./tmp/award-alerts.sqlite` fallback is for local development only. GitHub Actions is no longer the intended runtime for evaluator/notifier loops.
+- Persistent server execution is the intended production model for this service. Set `DATABASE_PATH` to a persistent host path for that runtime; the default `./tmp/award-alerts.sqlite` fallback is for local development only. GitHub Actions is no longer the intended runtime for evaluator/notifier loops. See [docs/award-alerts-operations.md](docs/award-alerts-operations.md) for the canonical `systemd` deployment model.
 - Alaska is the first provider, but the runtime surface is generic under `award-alerts`.
 
 ## Arkalis Summary
@@ -221,5 +223,7 @@ See [docs/arkalis.md](docs/arkalis.md) and [arkalis/README.md](arkalis/README.md
 ## Additional Docs
 
 - [docs/alaska.md](docs/alaska.md): Alaska scraper behavior and normalization rules.
+- [docs/award-alerts-backend-handoff.md](docs/award-alerts-backend-handoff.md): backend alert-service takeover notes, architecture, operational model, and current limits.
+- [docs/award-alerts-operations.md](docs/award-alerts-operations.md): canonical persistent-server `systemd` runbook for the SQLite + Discord backend.
 - [docs/arkalis.md](docs/arkalis.md): internal Arkalis architecture notes.
 - [arkalis/README.md](arkalis/README.md): concise developer-facing Arkalis overview.
