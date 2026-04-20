@@ -26,4 +26,4 @@ ENV NODE_ENV=production
 
 EXPOSE 2233
 
-CMD ["bash", "-lc", "mkdir -p \"$(dirname \"${DATABASE_PATH:-/data/award-alerts.sqlite}\")\" && if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then exec xvfb-run -a node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; else exec node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; fi"]
+CMD ["bash", "-lc", "mkdir -p \"$(dirname \"${DATABASE_PATH:-/data/award-alerts.sqlite}\")\" && if [ -z \"${DISPLAY:-}\" ] && command -v Xvfb >/dev/null 2>&1; then Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp >/tmp/xvfb.log 2>&1 & export DISPLAY=:99; fi && exec node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js"]

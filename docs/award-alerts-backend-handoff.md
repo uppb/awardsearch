@@ -270,6 +270,7 @@ Current runtime:
 
 - production is container-only
 - the container keeps Chromium bundled inside the image
+- the container starts its own `Xvfb` display when `DISPLAY` is unset
 - `linux/amd64` and `linux/arm64` are the intended supported targets
 - host-installed browser/runtime paths are not part of the supported production model
 
