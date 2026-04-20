@@ -210,6 +210,7 @@ The newer `award-alerts` backend is separate from marked fares:
   - `POST /api/award-alerts/operations/preview`
   - `POST /api/award-alerts/operations/run-evaluator`
   - `POST /api/award-alerts/operations/run-notifier`
+  - `POST /api/award-alerts/operations/run-scraper`
 - CLI management still exists for local/admin use:
   - `just award-alerts-cli list`
   - `just award-alerts-cli create --program alaska --origin SFO --destination HNL --date 2026-07-01 --cabin business`

@@ -47,6 +47,7 @@ Compared with the older in-progress alert work, the major changes are:
 18. Armed scheduled loop timers are cleared as soon as shutdown begins so late callback delivery cannot surface as an unhandled rejection.
 19. The internal admin API now has a checked-in OpenAPI contract plus a human-readable guide for local/operator use.
 20. A dedicated Dockerfile now exists for the combined service runtime instead of relying on the split worker entrypoints.
+21. The internal admin API now exposes a raw scraper batch endpoint for one-off validation calls, returning per-item Arkalis-wrapped scraper responses without mutating alert state.
 
 ## Current Ownership Boundaries
 
@@ -76,6 +77,7 @@ What they own:
 - evaluation state and run history persistence
 - repository-backed alert updates and history reads
 - application/service orchestration for CRUD, preview, and status passthrough
+- one-off raw scraper validation for admin/operator use
 - internal HTTP routing for health, CRUD/admin, status, and operational endpoints
 - notification event queueing
 - Discord delivery
@@ -99,12 +101,14 @@ Routes:
 - `GET /api/award-alerts/status`
 - `POST /api/award-alerts/operations/run-evaluator`
 - `POST /api/award-alerts/operations/run-notifier`
+- `POST /api/award-alerts/operations/run-scraper`
 - `POST /api/award-alerts/operations/preview`
 - `GET /api/award-alerts/:id/runs`
 - `GET /api/award-alerts/:id/notifications`
 
 The API is JSON-only and returns stable error objects shaped like `{ error: { code, message } }`.
 Write endpoints require a non-empty JSON object body; malformed JSON normalizes to `bad_request`, and scalar/array/empty/missing bodies are rejected with a stable `bad_request` message before service code runs.
+The raw scraper batch endpoint uses one top-level `scraperName` plus a non-empty `items` array, validates request-shape errors at the request level, and localizes runtime scraper failures to individual result items.
 
 ### Alaska provider-specific logic
 
@@ -241,6 +245,22 @@ Current provider support:
 
 - `alaska` only
 
+### Run one-off raw scraper searches
+
+`POST /api/award-alerts/operations/run-scraper`:
+
+1. validates `scraperName` plus batch item shape
+2. resolves the named scraper module under `awardwiz-scrapers/scrapers/`
+3. runs each item independently through Arkalis
+4. returns per-item success or failure without touching SQLite state
+
+Current reality:
+
+- this is an internal validation/debugging surface, not an alert workflow
+- the response preserves the raw Arkalis wrapper with `result` and `logLines` for successful items
+- unsupported scraper names fail the request with `bad_request`
+- per-item runtime failures remain localized to the failed item instead of aborting the whole batch
+
 ### Send notifications
 
 `awardwiz/workers/award-alerts-notifier.ts`:
@@ -324,6 +344,7 @@ Implemented now:
 - rule matching for cabin / nonstop / max miles / max cash
 - run history and persisted alert state
 - manual preview plus manual evaluator/notifier trigger endpoints
+- manual raw scraper batch validation through the admin API
 - unified single-process service runtime with embedded evaluator/notifier loops
 - checked-in OpenAPI contract and human-readable API guide
 - dedicated Docker runtime for the combined service
@@ -349,6 +370,7 @@ These are the main limitations a new engineer should know immediately:
 5. The evaluator catches provider search errors per date and records them, but there is still room for richer retry and recovery policy.
 6. The notifier intentionally favors at-most-once delivery over aggressive retry to avoid duplicate Discord posts.
 7. The operator docs now cover the canonical persistent service runtime, Docker image, and internal admin API contract.
+8. The new admin API covers most backend/operator validation needs that previously required the legacy scraper HTTP server.
 
 ## Current Migration Boundary
 
@@ -387,3 +409,4 @@ If another engineer is continuing from here, the highest-value next tasks are:
 1. decide whether to add auth before exposing the service outside a trusted network
 2. add the next provider only after the provider interface and operational model are proven stable
 3. decide whether the legacy `marked-fares` flow should eventually be folded into `award-alerts` or explicitly remain separate
+4. re-evaluate whether the legacy scraper HTTP server still has a necessary role now that the admin API can run one-off raw scraper validation calls

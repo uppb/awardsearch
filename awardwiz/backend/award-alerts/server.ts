@@ -21,6 +21,7 @@ export function createAwardAlertsApp({ service }: AwardAlertsServerDeps): Expres
   app.get("/api/award-alerts/status", handlers.getStatus)
   app.post("/api/award-alerts/operations/run-evaluator", handlers.runEvaluator)
   app.post("/api/award-alerts/operations/run-notifier", handlers.runNotifier)
+  app.post("/api/award-alerts/operations/run-scraper", handlers.runScraperBatch)
   app.post("/api/award-alerts/operations/preview", handlers.previewAlert)
   app.get("/api/award-alerts/:id/runs", handlers.getAlertRuns)
   app.get("/api/award-alerts/:id/notifications", handlers.getAlertNotifications)

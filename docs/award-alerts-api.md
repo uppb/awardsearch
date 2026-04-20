@@ -195,6 +195,74 @@ Possible responses:
 { "started": false, "reason": "already_running" }
 ```
 
+### Run Raw Scraper Batch
+
+`POST /api/award-alerts/operations/run-scraper`
+
+This is an admin/operator validation endpoint. It does not create alerts, mutate alert state, or enqueue notifications.
+
+Request shape:
+
+```json
+{
+  "scraperName": "alaska",
+  "items": [
+    {
+      "origin": "SHA",
+      "destination": "HND",
+      "departureDate": "2026-05-02"
+    },
+    {
+      "origin": "SHA",
+      "destination": "HND",
+      "departureDate": "2026-05-03"
+    }
+  ]
+}
+```
+
+Response shape:
+
+```json
+{
+  "scraperName": "alaska",
+  "results": [
+    {
+      "origin": "SHA",
+      "destination": "HND",
+      "departureDate": "2026-05-02",
+      "ok": true,
+      "response": {
+        "result": {
+          "flights": [
+            {
+              "flightNo": "JL 82",
+              "miles": 32500
+            }
+          ]
+        },
+        "logLines": ["search ok"]
+      }
+    },
+    {
+      "origin": "SHA",
+      "destination": "HND",
+      "departureDate": "2026-05-03",
+      "ok": false,
+      "error": "timeout waiting for results"
+    }
+  ]
+}
+```
+
+Notes:
+
+- one `scraperName` applies to the whole batch
+- each item runs independently
+- request-shape errors fail the whole request with `400 bad_request`
+- scraper execution failures stay localized to the affected item
+- successful items return the raw Arkalis-wrapped scraper payload, including `logLines`
+
 ### Preview
 
 `POST /api/award-alerts/operations/preview`
@@ -318,6 +386,20 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
     "endDate":"2026-05-03",
     "cabin":"business",
     "maxMiles":35000
+  }'
+```
+
+Run the known raw Alaska scraper validation batch:
+
+```bash
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-scraper \
+  -H 'content-type: application/json' \
+  -d '{
+    "scraperName":"alaska",
+    "items":[
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-02" },
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-03" }
+    ]
   }'
 ```
 

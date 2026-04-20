@@ -53,6 +53,31 @@ const status = {
   notifier: { running: true },
 }
 
+const rawScraperBatchResult = {
+  scraperName: "alaska",
+  results: [
+    {
+      origin: "SHA",
+      destination: "HND",
+      departureDate: "2026-05-02",
+      ok: true,
+      response: {
+        result: {
+          flights: [{ flightNo: "JL 82", miles: 32500 }],
+        },
+        logLines: ["search ok"],
+      },
+    },
+    {
+      origin: "SHA",
+      destination: "HND",
+      departureDate: "2026-05-03",
+      ok: false,
+      error: "timeout waiting for results",
+    },
+  ],
+} as const
+
 type AwardAlertsHttpService = Parameters<typeof createAwardAlertsApp>[0]["service"]
 
 const startServer = (service: AwardAlertsHttpService) => {
@@ -124,6 +149,7 @@ describe("award alerts HTTP API", () => {
       getStatus: vi.fn(() => status),
       triggerEvaluatorRun: vi.fn(async () => ({ started: "evaluator" })),
       triggerNotifierRun: vi.fn(async () => ({ started: "notifier" })),
+      runScraperBatch: vi.fn(async () => rawScraperBatchResult),
     }
 
     const started = startServer(service)
@@ -205,6 +231,26 @@ describe("award alerts HTTP API", () => {
     expect(response.response.status).toBe(200)
     expect(response.body).toEqual(preview)
 
+    response = await requestJson(started.baseUrl, "/api/award-alerts/operations/run-scraper", {
+      method: "POST",
+      body: JSON.stringify({
+        scraperName: "alaska",
+        items: [
+          { origin: "SHA", destination: "HND", departureDate: "2026-05-02" },
+          { origin: "SHA", destination: "HND", departureDate: "2026-05-03" },
+        ],
+      }),
+    })
+    expect(response.response.status).toBe(200)
+    expect(response.body).toEqual(rawScraperBatchResult)
+    expect(service.runScraperBatch).toHaveBeenCalledWith({
+      scraperName: "alaska",
+      items: [
+        { origin: "SHA", destination: "HND", departureDate: "2026-05-02" },
+        { origin: "SHA", destination: "HND", departureDate: "2026-05-03" },
+      ],
+    })
+
     response = await requestJson(started.baseUrl, "/api/award-alerts/alert-1/runs")
     expect(response.response.status).toBe(200)
     expect(response.body).toEqual([{ id: "run-1" }])
@@ -248,6 +294,9 @@ describe("award alerts HTTP API", () => {
       }),
       triggerNotifierRun: vi.fn(async () => {
         throw new Error("scheduler offline")
+      }),
+      runScraperBatch: vi.fn(async () => {
+        throw new Error("unsupported scraper: skyscanner")
       }),
     }
 
@@ -298,6 +347,21 @@ describe("award alerts HTTP API", () => {
         message: "scheduler offline",
       },
     })
+
+    response = await requestJson(started.baseUrl, "/api/award-alerts/operations/run-scraper", {
+      method: "POST",
+      body: JSON.stringify({
+        scraperName: "skyscanner",
+        items: [{ origin: "SHA", destination: "HND", departureDate: "2026-05-02" }],
+      }),
+    })
+    expect(response.response.status).toBe(400)
+    expect(response.body).toEqual({
+      error: {
+        code: "bad_request",
+        message: "unsupported scraper: skyscanner",
+      },
+    })
   })
 
   it("normalizes malformed JSON, non-object JSON bodies, and unknown routes", async () => {
@@ -315,6 +379,7 @@ describe("award alerts HTTP API", () => {
       getStatus: vi.fn(() => status),
       triggerEvaluatorRun: vi.fn(async () => ({ started: true })),
       triggerNotifierRun: vi.fn(async () => ({ started: true })),
+      runScraperBatch: vi.fn(async () => rawScraperBatchResult),
     }
 
     const started = startServer(service)
@@ -371,6 +436,7 @@ describe("award alerts HTTP API", () => {
       getStatus: vi.fn(() => status),
       triggerEvaluatorRun: vi.fn(async () => ({ started: true })),
       triggerNotifierRun: vi.fn(async () => ({ started: true })),
+      runScraperBatch: vi.fn(async () => rawScraperBatchResult),
     }
 
     const started = startServer(service)
@@ -414,8 +480,22 @@ describe("award alerts HTTP API", () => {
       },
     })
 
+    response = await fetch(`${started.baseUrl()}/api/award-alerts/operations/run-scraper`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: {
+        code: "bad_request",
+        message: "request body must be a non-empty JSON object",
+      },
+    })
+
     expect(service.createAlert).not.toHaveBeenCalled()
     expect(service.updateAlert).not.toHaveBeenCalled()
     expect(service.previewAlert).not.toHaveBeenCalled()
+    expect(service.runScraperBatch).not.toHaveBeenCalled()
   })
 })

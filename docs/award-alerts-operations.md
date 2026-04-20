@@ -85,6 +85,20 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
 curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-notifier
 ```
 
+Raw scraper validation example:
+
+```bash
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-scraper \
+  -H 'content-type: application/json' \
+  -d '{
+    "scraperName":"alaska",
+    "items":[
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-02" },
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-03" }
+    ]
+  }'
+```
+
 Preview example:
 
 ```bash
@@ -141,5 +155,6 @@ The container image uses the dedicated `awardwiz/backend/award-alerts/Dockerfile
 
 - The admin API is internal and currently unauthenticated.
 - Write endpoints require a non-empty JSON object body.
+- The raw scraper batch endpoint is for validation/debugging only and does not persist anything to SQLite.
 - The notifier posts to one shared Discord webhook and uses at-most-once delivery semantics for ambiguous webhook outcomes.
 - The single-process persistent service model is the canonical production path. GitHub Actions and split evaluator/notifier timers are no longer the intended runtime.

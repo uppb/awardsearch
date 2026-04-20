@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express"
 import type { AwardAlertPatchInput, AwardAlertWriteInput } from "./validation.js"
+import type { RawScraperBatchInput } from "./types.js"
 
 export type AwardAlertsHttpService = {
   listAlerts: () => Promise<unknown[]> | unknown[]
@@ -15,6 +16,7 @@ export type AwardAlertsHttpService = {
   getStatus: () => Promise<unknown> | unknown
   triggerEvaluatorRun: () => Promise<unknown> | unknown
   triggerNotifierRun: () => Promise<unknown> | unknown
+  runScraperBatch: (input: RawScraperBatchInput) => Promise<unknown> | unknown
 }
 
 export type AwardAlertsHttpErrorBody = {
@@ -41,6 +43,7 @@ export type AwardAlertsHttpHandlers = {
   getStatus: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
   runEvaluator: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
   runNotifier: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  runScraperBatch: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
   previewAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
   getAlertRuns: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
   getAlertNotifications: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
@@ -139,6 +142,10 @@ export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): 
 
   runNotifier: asyncRoute(async (_req, res) => {
     await send(res, await service.triggerNotifierRun())
+  }),
+
+  runScraperBatch: asyncRoute(async (req, res) => {
+    await send(res, await service.runScraperBatch(getJsonObjectBody<RawScraperBatchInput>(req)))
   }),
 
   previewAlert: asyncRoute(async (req, res) => {

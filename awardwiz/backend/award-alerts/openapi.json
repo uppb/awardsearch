@@ -133,6 +133,36 @@
         }
       }
     },
+    "/api/award-alerts/operations/run-scraper": {
+      "post": {
+        "summary": "Run one raw scraper batch for validation without persistence",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RawScraperBatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-item raw scraper results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawScraperBatchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
     "/api/award-alerts/operations/preview": {
       "post": {
         "summary": "Preview alert matches without persistence",
@@ -599,6 +629,86 @@
               "reason": { "type": "string" }
             },
             "required": ["started", "reason"]
+          }
+        ]
+      },
+      "RawScraperBatchInput": {
+        "type": "object",
+        "description": "Non-empty JSON object required. `scraperName` applies to every item in the batch.",
+        "required": ["scraperName", "items"],
+        "properties": {
+          "scraperName": { "type": "string", "example": "alaska" },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/RawScraperBatchItemInput"
+            }
+          }
+        }
+      },
+      "RawScraperBatchItemInput": {
+        "type": "object",
+        "required": ["origin", "destination", "departureDate"],
+        "properties": {
+          "origin": { "type": "string", "pattern": "^[A-Z]{3}$", "example": "SHA" },
+          "destination": { "type": "string", "pattern": "^[A-Z]{3}$", "example": "HND" },
+          "departureDate": { "type": "string", "format": "date", "example": "2026-05-02" }
+        }
+      },
+      "RawScraperResponse": {
+        "type": "object",
+        "properties": {
+          "result": {},
+          "logLines": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["result", "logLines"]
+      },
+      "RawScraperBatchResult": {
+        "type": "object",
+        "required": ["scraperName", "results"],
+        "properties": {
+          "scraperName": { "type": "string" },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RawScraperBatchItemResult"
+            }
+          }
+        }
+      },
+      "RawScraperBatchItemResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RawScraperBatchItemInput"
+          },
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "ok": { "const": true },
+                  "response": {
+                    "$ref": "#/components/schemas/RawScraperResponse"
+                  }
+                },
+                "required": ["ok", "response"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "ok": { "const": false },
+                  "error": { "type": "string" },
+                  "response": {
+                    "$ref": "#/components/schemas/RawScraperResponse"
+                  }
+                },
+                "required": ["ok", "error"]
+              }
+            ]
           }
         ]
       },
