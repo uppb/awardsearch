@@ -1,23 +1,16 @@
 # Award Alerts Operations
 
 This is the canonical operator runbook for the SQLite + Discord `award-alerts` backend.
-The intended deployment model is one persistent Linux server managed by `systemd`.
+The intended deployment model is one persistent service process, either under `systemd` or in one container.
 
 ## Runtime Model
 
-- one persistent server
+- one persistent service process
 - one SQLite database on persistent disk
-- one evaluator timer
-- one notifier timer
+- one embedded evaluator loop
+- one embedded notifier loop
+- one internal unauthenticated admin HTTP API
 - one shared Discord webhook
-
-Host prerequisites:
-
-- Node.js and `npm`
-- `just`
-- a checked-out repo working tree, for example `/opt/awardwiz`
-- installed dependencies from `npm install`
-- Chromium or Chrome plus `xvfb-run` on headless Linux
 
 New alerts default to:
 
@@ -30,6 +23,9 @@ Place the runtime env file somewhere stable on the host, such as `/etc/awardwiz/
 
 ```bash
 DATABASE_PATH=/var/lib/awardwiz/award-alerts.sqlite
+AWARD_ALERTS_PORT=2233
+AWARD_ALERTS_EVALUATOR_INTERVAL_MS=60000
+AWARD_ALERTS_NOTIFIER_INTERVAL_MS=60000
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 DISCORD_USERNAME=AwardWiz
 DISCORD_AVATAR_URL=https://example.com/awardwiz-avatar.png
@@ -38,106 +34,112 @@ CHROME_PATH=/usr/bin/chromium
 
 `DATABASE_PATH` must point at persistent storage. The default `./tmp/award-alerts.sqlite` fallback is for local development only.
 
-## systemd Units
+## systemd Service
 
-### `/etc/systemd/system/award-alerts-evaluator.service`
+### `/etc/systemd/system/award-alerts.service`
 
 ```ini
 [Unit]
-Description=AwardWiz award alerts evaluator
+Description=AwardWiz award alerts service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=simple
 WorkingDirectory=/opt/awardwiz
 EnvironmentFile=/etc/awardwiz/award-alerts.env
-ExecStart=/usr/bin/env bash -lc 'just run-award-alerts-evaluator'
-```
-
-### `/etc/systemd/system/award-alerts-evaluator.timer`
-
-```ini
-[Unit]
-Description=Run AwardWiz award alerts evaluator every minute
-
-[Timer]
-OnCalendar=*-*-* *:*:00
-Persistent=true
+ExecStart=/usr/bin/env bash -lc 'just run-award-alerts-service'
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=120
 
 [Install]
-WantedBy=timers.target
+WantedBy=multi-user.target
 ```
 
-### `/etc/systemd/system/award-alerts-notifier.service`
-
-```ini
-[Unit]
-Description=AwardWiz award alerts notifier
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-WorkingDirectory=/opt/awardwiz
-EnvironmentFile=/etc/awardwiz/award-alerts.env
-ExecStart=/usr/bin/env bash -lc 'just run-award-alerts-notifier'
-```
-
-### `/etc/systemd/system/award-alerts-notifier.timer`
-
-```ini
-[Unit]
-Description=Run AwardWiz award alerts notifier every minute
-
-[Timer]
-OnCalendar=*-*-* *:*:30
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-The timer cadence is independent from alert-level cadence. The evaluator wakes every minute, but each alert still honors its own `poll_interval_minutes` and `min_notification_interval_minutes` values.
+The direct-run service entrypoint now handles `SIGTERM` and `SIGINT` by closing the HTTP server first, rejecting new manual loop triggers, clearing armed loop timers, and then draining the evaluator/notifier loops before SQLite shutdown.
 
 ## Enable And Inspect
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now award-alerts-evaluator.timer
-sudo systemctl enable --now award-alerts-notifier.timer
-systemctl status award-alerts-evaluator.timer
-systemctl status award-alerts-notifier.timer
-systemctl status award-alerts-evaluator.service
-systemctl status award-alerts-notifier.service
-journalctl -u award-alerts-evaluator.service -n 200 --no-pager
-journalctl -u award-alerts-notifier.service -n 200 --no-pager
+sudo systemctl enable --now award-alerts.service
+systemctl status award-alerts.service
+journalctl -u award-alerts.service -n 200 --no-pager
 ```
 
-If you want to force a manual run outside the timers:
+## Local Service Commands
 
 ```bash
-sudo systemctl start award-alerts-evaluator.service
-sudo systemctl start award-alerts-notifier.service
+just run-award-alerts-service
+just award-alerts-cli list
+curl -sS http://127.0.0.1:2233/health
+curl -sS http://127.0.0.1:2233/api/award-alerts/status
 ```
+
+Manual operational endpoints:
+
+```bash
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-notifier
+```
+
+Preview example:
+
+```bash
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
+  -H 'content-type: application/json' \
+  -d '{
+    "program":"alaska",
+    "origin":"SHA",
+    "destination":"HND",
+    "startDate":"2026-05-01",
+    "endDate":"2026-05-03",
+    "cabin":"business",
+    "maxMiles":35000
+  }'
+```
+
+## Docker Runtime
+
+Build:
+
+```bash
+just build-award-alerts-service-docker
+```
+
+Example run:
+
+```bash
+docker run --rm -p 2233:2233 \
+  -e DATABASE_PATH=/data/award-alerts.sqlite \
+  -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
+  -e AWARD_ALERTS_PORT=2233 \
+  -v "$(pwd)/tmp:/data" \
+  awardwiz:award-alerts
+```
+
+The container image uses the dedicated `awardwiz/backend/award-alerts/Dockerfile` and starts the combined service entrypoint.
 
 ## SQLite Persistence And Backup
 
 - Keep the SQLite file on persistent disk.
 - Do not place the database on ephemeral instance storage if you expect alerts, state, or notification events to survive a restart.
 - Back up the SQLite file regularly.
-- Prefer a backup workflow that pauses the timers or otherwise avoids copying a file while it is actively being written.
+- Prefer a backup workflow that stops the service or otherwise avoids copying the file while it is actively being written.
 - Treat the SQLite database as the coordination layer for a single host, not a shared multi-host datastore.
 
 ## Chromium And Xvfb
 
-- The evaluator runs live Alaska scraping, so Chromium or Chrome must be installed on the host.
+- The evaluator runs live Alaska scraping, so Chromium or Chrome must be installed on the host or available in the container image.
 - Set `CHROME_PATH` if autodiscovery is unreliable or if the binary lives in a nonstandard location.
 - On headless Linux, install `xvfb-run` or provide another usable display solution.
-- The evaluator `just` target uses `xvfb-run` automatically when `DISPLAY` is unset and `xvfb-run` is available.
+- The `just run-award-alerts-service` target uses `xvfb-run` automatically when `DISPLAY` is unset and `xvfb-run` is available.
 
 ## Operational Notes
 
-- `award-alerts` is CLI-managed; there is no admin API or frontend CRUD surface.
+- The admin API is internal and currently unauthenticated.
+- Write endpoints require a non-empty JSON object body.
 - The notifier posts to one shared Discord webhook and uses at-most-once delivery semantics for ambiguous webhook outcomes.
-- The persistent-server `systemd` model is the canonical production path. GitHub Actions and ad hoc worker loops are not the intended runtime.
+- The single-process persistent service model is the canonical production path. GitHub Actions and split evaluator/notifier timers are no longer the intended runtime.

@@ -14,6 +14,8 @@ This is the current intended direction:
 - CLI management plus an unauthenticated internal Express admin API
 - one persistent server as the intended runtime
 - a single-process service entrypoint that owns the HTTP server plus evaluator/notifier loops
+- OpenAPI and human-readable API docs that describe the internal admin surface
+- a dedicated Docker runtime for the combined service entrypoint
 - SIGTERM and SIGINT now close that service entrypoint gracefully before loop drain
 - shutdown cancels any armed loop timer before drain so late scheduled ticks do not leak rejections
 - Discord webhook delivery instead of email for the new alert backend
@@ -43,6 +45,8 @@ Compared with the older in-progress alert work, the major changes are:
 16. A unified service entrypoint now opens SQLite, constructs the repository, starts the evaluator/notifier loops in-process, and serves the internal Express API from one runtime.
 17. The service shutdown path now quiesces intake first, then drains loops, and the direct-run process path waits for the returned close handle on SIGTERM/SIGINT.
 18. Armed scheduled loop timers are cleared as soon as shutdown begins so late callback delivery cannot surface as an unhandled rejection.
+19. The internal admin API now has a checked-in OpenAPI contract plus a human-readable guide for local/operator use.
+20. A dedicated Dockerfile now exists for the combined service runtime instead of relying on the split worker entrypoints.
 
 ## Current Ownership Boundaries
 
@@ -80,6 +84,7 @@ What they own:
 ### Internal Express API
 
 The current HTTP surface lives under `awardwiz/backend/award-alerts/server.ts` and `awardwiz/backend/award-alerts/http-handlers.ts`.
+The checked-in contract lives at `awardwiz/backend/award-alerts/openapi.json`, and the human-readable guide lives at `docs/award-alerts-api.md`.
 
 Routes:
 
@@ -179,7 +184,22 @@ Important fields:
 
 ### Create alert
 
-Alerts are created through the CLI:
+The internal admin API is now the primary runtime surface:
+
+```bash
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts \
+  -H 'content-type: application/json' \
+  -d '{
+    "program":"alaska",
+    "origin":"SHA",
+    "destination":"HND",
+    "date":"2026-05-02",
+    "cabin":"business",
+    "maxMiles":35000
+  }'
+```
+
+The CLI still works for local/admin use:
 
 ```bash
 just award-alerts-cli create \
@@ -276,8 +296,8 @@ Useful local commands:
 ```bash
 just award-alerts-cli list
 just award-alerts-cli show <alert-id>
-just run-award-alerts-evaluator
-just run-award-alerts-notifier
+just run-award-alerts-service
+just build-award-alerts-service-docker
 just run-scraper alaska SHA HND 2026-05-02
 ```
 
@@ -294,7 +314,7 @@ npm exec tsc -- --noEmit
 Implemented now:
 
 - generic alert model with `program`
-- CLI create/list/show/pause/resume/delete
+- internal admin HTTP CRUD plus CLI create/list/show/pause/resume/delete
 - shared alert validation for CLI and future API-facing input flows
 - optional `userId` handling in alert input models
 - SQLite schema and migrations
@@ -303,6 +323,10 @@ Implemented now:
 - Alaska provider adapter
 - rule matching for cabin / nonstop / max miles / max cash
 - run history and persisted alert state
+- manual preview plus manual evaluator/notifier trigger endpoints
+- unified single-process service runtime with embedded evaluator/notifier loops
+- checked-in OpenAPI contract and human-readable API guide
+- dedicated Docker runtime for the combined service
 - Discord webhook notifier
 - generic Alaska booking link in notifications
 - end-to-end backend verification from alert creation through Discord delivery
@@ -319,12 +343,12 @@ Recent live verification examples on this branch:
 These are the main limitations a new engineer should know immediately:
 
 1. Only the `alaska` provider is implemented.
-2. Alert management is CLI-only. There is no admin API or frontend CRUD path.
+2. The admin API is intentionally internal and currently has no authentication layer.
 3. Notifications go to one shared Discord webhook, not per-user destinations.
 4. The new backend and legacy `marked-fares` system coexist. There is no unified alert model yet.
 5. The evaluator catches provider search errors per date and records them, but there is still room for richer retry and recovery policy.
 6. The notifier intentionally favors at-most-once delivery over aggressive retry to avoid duplicate Discord posts.
-7. The operator docs now cover the canonical persistent-server `systemd` deployment model and the unified service entrypoint.
+7. The operator docs now cover the canonical persistent service runtime, Docker image, and internal admin API contract.
 
 ## Current Migration Boundary
 
@@ -360,6 +384,6 @@ If future engineers see “no results” discrepancies again, inspect the Arkali
 
 If another engineer is continuing from here, the highest-value next tasks are:
 
-1. decide whether to build an admin HTTP API or keep CLI-only management longer
+1. decide whether to add auth before exposing the service outside a trusted network
 2. add the next provider only after the provider interface and operational model are proven stable
 3. decide whether the legacy `marked-fares` flow should eventually be folded into `award-alerts` or explicitly remain separate

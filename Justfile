@@ -70,6 +70,17 @@ run-award-alerts-evaluator:
 run-award-alerts-notifier:
   DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/award-alerts-notifier.ts
 
+run-award-alerts-service: build
+  mkdir -p "$(dirname "${DATABASE_PATH:-./tmp/award-alerts.sqlite}")"
+  if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
+    DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" AWARD_ALERTS_PORT="${AWARD_ALERTS_PORT:-2233}" CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || printf '%s' /usr/sbin/chromium)}" xvfb-run -a node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; \
+  else \
+    DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" AWARD_ALERTS_PORT="${AWARD_ALERTS_PORT:-2233}" node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; \
+  fi
+
+build-award-alerts-service-docker tag="awardwiz:award-alerts":
+  docker buildx build --file ./awardwiz/backend/award-alerts/Dockerfile -t {{tag}} .
+
 award-alerts-cli *ARGS='':
   DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/backend/award-alerts/cli.ts {{ARGS}}
 

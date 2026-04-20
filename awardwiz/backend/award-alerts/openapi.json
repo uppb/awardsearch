@@ -1,0 +1,691 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Award Alerts API",
+    "version": "1.0.0",
+    "description": "Internal admin API for the SQLite-backed award alerts service."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:2233"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/award-alerts": {
+      "get": {
+        "summary": "List alerts",
+        "responses": {
+          "200": {
+            "description": "Alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AwardAlert"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create alert",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AwardAlertWriteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created alert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlert"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/status": {
+      "get": {
+        "summary": "Get runtime status",
+        "responses": {
+          "200": {
+            "description": "Runtime status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlertsRuntimeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/award-alerts/operations/run-evaluator": {
+      "post": {
+        "summary": "Trigger evaluator loop",
+        "responses": {
+          "200": {
+            "description": "Trigger result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/operations/run-notifier": {
+      "post": {
+        "summary": "Trigger notifier loop",
+        "responses": {
+          "200": {
+            "description": "Trigger result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/operations/preview": {
+      "post": {
+        "summary": "Preview alert matches without persistence",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AwardAlertWriteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview evaluation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlertMatchEvaluation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AlertId"
+        }
+      ],
+      "get": {
+        "summary": "Get one alert",
+        "responses": {
+          "200": {
+            "description": "Alert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlert"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update alert",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AwardAlertPatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated alert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlert"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete alert",
+        "responses": {
+          "200": {
+            "description": "Deleted alert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlert"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/{id}/pause": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AlertId"
+        }
+      ],
+      "post": {
+        "summary": "Pause alert",
+        "responses": {
+          "200": {
+            "description": "Paused alert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlert"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/{id}/resume": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AlertId"
+        }
+      ],
+      "post": {
+        "summary": "Resume alert",
+        "responses": {
+          "200": {
+            "description": "Resumed alert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwardAlert"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/{id}/runs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AlertId"
+        }
+      ],
+      "get": {
+        "summary": "List evaluation runs for one alert",
+        "responses": {
+          "200": {
+            "description": "Alert runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AwardAlertRun"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      }
+    },
+    "/api/award-alerts/{id}/notifications": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AlertId"
+        }
+      ],
+      "get": {
+        "summary": "List notification events for one alert",
+        "responses": {
+          "200": {
+            "description": "Notification events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationEvent"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/AlertNotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "AlertId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "AlertNotFound": {
+        "description": "Alert not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": ["ok"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["alert_not_found", "bad_request", "not_found"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"]
+          }
+        },
+        "required": ["error"]
+      },
+      "AwardAlertWriteInput": {
+        "type": "object",
+        "description": "Non-empty JSON object required.",
+        "properties": {
+          "program": { "type": "string", "example": "alaska" },
+          "userId": { "type": "string" },
+          "origin": { "type": "string", "example": "SHA" },
+          "destination": { "type": "string", "example": "HND" },
+          "date": { "type": "string", "format": "date" },
+          "startDate": { "type": "string", "format": "date" },
+          "endDate": { "type": "string", "format": "date" },
+          "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+          "nonstopOnly": { "type": "boolean" },
+          "maxMiles": { "type": "integer", "minimum": 0 },
+          "maxCash": { "type": "number", "minimum": 0 },
+          "pollIntervalMinutes": { "type": "integer", "minimum": 1 },
+          "minNotificationIntervalMinutes": { "type": "integer", "minimum": 1 },
+          "active": { "type": "boolean" }
+        },
+        "required": ["program", "origin", "destination", "cabin"]
+      },
+      "AwardAlertPatchInput": {
+        "type": "object",
+        "description": "Non-empty JSON object required. Nullable fields clear optional values.",
+        "properties": {
+          "userId": { "type": ["string", "null"] },
+          "origin": { "type": "string" },
+          "destination": { "type": "string" },
+          "date": { "type": ["string", "null"], "format": "date" },
+          "startDate": { "type": ["string", "null"], "format": "date" },
+          "endDate": { "type": ["string", "null"], "format": "date" },
+          "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+          "nonstopOnly": { "type": "boolean" },
+          "maxMiles": { "type": ["integer", "null"], "minimum": 0 },
+          "maxCash": { "type": ["number", "null"], "minimum": 0 },
+          "pollIntervalMinutes": { "type": "integer", "minimum": 1 },
+          "minNotificationIntervalMinutes": { "type": "integer", "minimum": 1 },
+          "active": { "type": "boolean" }
+        }
+      },
+      "AwardAlert": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/AwardAlertBase" },
+              {
+                "type": "object",
+                "properties": {
+                  "dateMode": { "const": "single_date" },
+                  "date": { "type": "string", "format": "date" }
+                },
+                "required": ["dateMode", "date"]
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/AwardAlertBase" },
+              {
+                "type": "object",
+                "properties": {
+                  "dateMode": { "const": "date_range" },
+                  "startDate": { "type": "string", "format": "date" },
+                  "endDate": { "type": "string", "format": "date" }
+                },
+                "required": ["dateMode", "startDate", "endDate"]
+              }
+            ]
+          }
+        ]
+      },
+      "AwardAlertBase": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "program": { "type": "string" },
+          "userId": { "type": ["string", "null"] },
+          "origin": { "type": "string" },
+          "destination": { "type": "string" },
+          "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+          "nonstopOnly": { "type": "boolean" },
+          "maxMiles": { "type": ["integer", "null"] },
+          "maxCash": { "type": ["number", "null"] },
+          "active": { "type": "boolean" },
+          "pollIntervalMinutes": { "type": "integer" },
+          "minNotificationIntervalMinutes": { "type": "integer" },
+          "lastCheckedAt": { "type": ["string", "null"], "format": "date-time" },
+          "nextCheckAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": [
+          "id",
+          "program",
+          "origin",
+          "destination",
+          "cabin",
+          "nonstopOnly",
+          "active",
+          "pollIntervalMinutes",
+          "minNotificationIntervalMinutes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "LoopStatus": {
+        "type": "object",
+        "properties": {
+          "running": { "type": "boolean" },
+          "lastStartedAt": { "type": ["string", "null"], "format": "date-time" },
+          "lastCompletedAt": { "type": ["string", "null"], "format": "date-time" },
+          "lastError": { "type": ["string", "null"] },
+          "intervalMs": { "type": "integer" }
+        },
+        "required": ["running", "intervalMs"]
+      },
+      "AwardAlertsRuntimeStatus": {
+        "type": "object",
+        "properties": {
+          "databasePath": { "type": "string" },
+          "evaluator": { "$ref": "#/components/schemas/LoopStatus" },
+          "notifier": { "$ref": "#/components/schemas/LoopStatus" }
+        },
+        "required": ["evaluator", "notifier"]
+      },
+      "TriggerResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "started": { "const": true }
+            },
+            "required": ["started"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "started": { "const": false },
+              "reason": { "type": "string" }
+            },
+            "required": ["started", "reason"]
+          }
+        ]
+      },
+      "AwardAlertMatch": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "flightNo": { "type": "string" },
+          "origin": { "type": "string" },
+          "destination": { "type": "string" },
+          "departureDateTime": { "type": "string" },
+          "arrivalDateTime": { "type": "string" },
+          "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+          "miles": { "type": "integer" },
+          "cash": { "type": "number" },
+          "currencyOfCash": { "type": "string" },
+          "bookingClass": { "type": ["string", "null"] },
+          "segmentCount": { "type": "integer" }
+        },
+        "required": [
+          "date",
+          "flightNo",
+          "origin",
+          "destination",
+          "departureDateTime",
+          "arrivalDateTime",
+          "cabin",
+          "miles",
+          "cash",
+          "currencyOfCash",
+          "segmentCount"
+        ]
+      },
+      "AwardAlertMatchEvaluation": {
+        "type": "object",
+        "properties": {
+          "hasMatch": { "type": "boolean" },
+          "matchedDates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" }
+          },
+          "matchingResults": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AwardAlertMatch" }
+          },
+          "bestMatchSummary": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/AwardAlertMatch" },
+              { "type": "null" }
+            ]
+          },
+          "matchFingerprint": { "type": "string" },
+          "bookingUrl": { "type": "string" }
+        },
+        "required": ["hasMatch", "matchedDates", "matchingResults", "matchFingerprint", "bookingUrl"]
+      },
+      "AwardAlertRun": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "alertId": { "type": "string" },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "searchedDates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" }
+          },
+          "scrapeCount": { "type": "integer" },
+          "scrapeSuccessCount": { "type": "integer" },
+          "scrapeErrorCount": { "type": "integer" },
+          "matchedResultCount": { "type": "integer" },
+          "hasMatch": { "type": "boolean" },
+          "errorSummary": { "type": ["string", "null"] }
+        },
+        "required": [
+          "id",
+          "alertId",
+          "startedAt",
+          "completedAt",
+          "searchedDates",
+          "scrapeCount",
+          "scrapeSuccessCount",
+          "scrapeErrorCount",
+          "matchedResultCount",
+          "hasMatch"
+        ]
+      },
+      "NotificationEventPayload": {
+        "type": "object",
+        "properties": {
+          "origin": { "type": "string" },
+          "destination": { "type": "string" },
+          "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+          "matchedDates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" }
+          },
+          "matchCount": { "type": "integer" },
+          "nonstopOnly": { "type": "boolean" },
+          "maxMiles": { "type": ["integer", "null"] },
+          "maxCash": { "type": ["number", "null"] },
+          "bestMatch": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/AwardAlertMatch" },
+              { "type": "null" }
+            ]
+          },
+          "bookingUrl": { "type": "string" }
+        },
+        "required": [
+          "origin",
+          "destination",
+          "cabin",
+          "matchedDates",
+          "matchCount",
+          "nonstopOnly",
+          "bookingUrl"
+        ]
+      },
+      "NotificationEvent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "alertId": { "type": "string" },
+          "userId": { "type": ["string", "null"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "processing", "delivered_unconfirmed", "sent", "failed"]
+          },
+          "claimedAt": { "type": ["string", "null"], "format": "date-time" },
+          "claimToken": { "type": ["string", "null"] },
+          "attemptedAt": { "type": ["string", "null"], "format": "date-time" },
+          "payload": { "$ref": "#/components/schemas/NotificationEventPayload" },
+          "sentAt": { "type": ["string", "null"], "format": "date-time" },
+          "failureReason": { "type": ["string", "null"] }
+        },
+        "required": ["id", "alertId", "createdAt", "status", "payload"]
+      }
+    }
+  }
+}
