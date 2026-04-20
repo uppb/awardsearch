@@ -71,15 +71,16 @@ export const evaluateOneAlert = async ({ alert, repository, providers, now }: Ev
   const nowIso = now.toISOString()
   const provider = providers[alert.program]
   if (!provider) {
-    return repository.saveEvaluation({
+    repository.saveEvaluation({
       alert,
       state: buildUnsupportedProviderState(alert, nowIso),
       run: buildUnsupportedProviderRun(alert, nowIso),
     })
+    return
   }
 
   const searchedDates = expandAlertDates(alert)
-  const priorState = await repository.getState(alert.id)
+  const priorState = repository.getState(alert.id)
   const searchOutcomes: SearchOutcome[] = []
 
   for (const departureDate of searchedDates) {
@@ -159,8 +160,8 @@ export const evaluateOneAlert = async ({ alert, repository, providers, now }: Ev
     failureReason: undefined,
   }
 
-  await repository.createNotificationEvent(event)
-  await repository.saveEvaluation({
+  repository.createNotificationEvent(event)
+  repository.saveEvaluation({
     alert,
     state: {
       ...state,
