@@ -21,7 +21,7 @@ This is the current intended direction:
 - Discord webhook delivery instead of email for the new alert backend
 - Alaska as the first provider, with the provider implementation now fully owned inside the generic backend boundary
 
-This backend is separate from the older frontend-driven `marked-fares` flow. `marked-fares` still exists, still uses Firestore and email, and should be treated as legacy functionality rather than part of the new backend alert service.
+The legacy Firestore/email marked-fares worker/runtime has been removed from this branch. Any remaining browser-side marked-fares UI code is outside this backend handoff and should not be treated as a coexisting alert runtime.
 
 ## What Changed
 
@@ -367,7 +367,7 @@ These are the main limitations a new engineer should know immediately:
 1. Only the `alaska` provider is implemented.
 2. The admin API is intentionally internal and currently has no authentication layer.
 3. Notifications go to one shared Discord webhook, not per-user destinations.
-4. The new backend and legacy `marked-fares` system coexist. There is no unified alert model yet.
+4. The legacy marked-fares worker/runtime has been retired from this branch. There is no unified alert model in active use here.
 5. The evaluator catches provider search errors per date and records them, but there is still room for richer retry and recovery policy.
 6. The notifier intentionally favors at-most-once delivery over aggressive retry to avoid duplicate Discord posts.
 7. The operator docs now cover the canonical persistent service runtime, Docker image, and internal admin API contract.
@@ -409,5 +409,5 @@ If another engineer is continuing from here, the highest-value next tasks are:
 
 1. decide whether to add auth before exposing the service outside a trusted network
 2. add the next provider only after the provider interface and operational model are proven stable
-3. decide whether the legacy `marked-fares` flow should eventually be folded into `award-alerts` or explicitly remain separate
+3. decide whether the remaining browser-side marked-fares UI should eventually be retired in a later cleanup phase
 4. re-evaluate whether the legacy scraper HTTP server still has a necessary role now that the admin API can run one-off raw scraper validation calls

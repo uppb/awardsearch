@@ -15,8 +15,7 @@ This README is for developers working on the codebase. It describes what is impl
 - Chooses compatible award scrapers from `config.json` based on airline support, alliance groups, disabled flags, and cash-only scraper rules.
 - Runs the selected scrapers through Arkalis, a CDP-based Chromium automation layer built for this project.
 - Normalizes scraper output into a shared `FlightWithFares` shape, merges duplicate flights, annotates amenities, and infers saver fares when possible.
-- Displays merged results in a React frontend with cached query results, sortable fare columns, login via Google/Firebase Auth, and a Firestore-backed "marked fares" UI.
-- Includes a worker that re-runs marked-fare searches and sends notification emails when saver availability changes.
+- Displays merged results in a React frontend with cached query results, sortable fare columns, login via Google/Firebase Auth, and a Firestore-backed "marked fares" UI that remains in the browser app.
 - Includes a separate SQLite-backed `award-alerts` backend with an internal admin HTTP API, in-process evaluator/notifier loops, and Discord notification delivery.
 
 ## Important Limitations
@@ -26,7 +25,7 @@ This README is for developers working on the codebase. It describes what is impl
 - Flight discovery depends on `fr24`; if FlightRadar24 does not return an airline for a route, AwardWiz will not schedule that airline's scraper.
 - Several scrapers exist in the repo but are disabled in `config.json`, so code presence does not mean the scraper is active.
 - Scraper reliability varies by airline because anti-botting behavior changes over time.
-- Marked-fare notifications exist, but the worker is still effectively beta-only: it hardcodes a `BETA_USERS` allowlist and only reacts to saver-availability changes.
+- The legacy Firestore/email marked-fares worker/runtime has been removed from this branch; only the browser-side marked-fares UI remains for later cleanup.
 - The SQLite award-alert backend is an internal admin service, not a user-facing product surface. There is no auth on that API yet and no frontend CRUD UI.
 - Browser raw-scraper calls now target the award-alerts admin API; set `VITE_AWARD_ALERTS_URL` if the frontend is talking to a separate service host.
 - The repo has unit coverage for the search-merging pipeline, and some live scraper/debug workflows still exist, but there is no maintained always-on live scraper test suite in this branch.
@@ -156,7 +155,6 @@ Optional for the browser app:
 
 ### Workers
 
-- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators.
 - `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
 - `DATABASE_PATH`: Required for deployed `award-alerts` CLI and worker runtime, and it should point to persistent disk on the host. The `./tmp/award-alerts.sqlite` fallback is only a local-development convenience.
 - `AWARD_ALERTS_PORT`: HTTP port for the combined `award-alerts` service runtime. Defaults to `2233`.
@@ -176,15 +174,7 @@ Optional for the browser app:
 
 ## Notification Backends
 
-The marked-fares flow is implemented, but it is not a general-purpose finished feature yet:
-
-- The frontend lets users mark a fare from the results table.
-- Marked fares are stored in Firestore.
-- The worker re-runs searches and compares current saver availability against the saved state.
-- Emails are only sent when saver availability changes.
-- The worker currently filters to a hardcoded beta-user allowlist.
-
-The newer `award-alerts` backend is separate from marked fares:
+The legacy Firestore/email marked-fares worker runtime has been removed from this branch. The browser still contains the marked-fares UI code, but the only maintained alert backend is `award-alerts`:
 
 - It lives under `awardwiz/backend/award-alerts/` and `awardwiz/workers/award-alerts-*.ts`.
 - It uses one SQLite database file for alert definitions, state, run history, and notification events.

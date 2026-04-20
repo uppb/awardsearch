@@ -25,7 +25,6 @@ check: build test
 check-with-act:
   act --job run-checks --rm
   act --job deploy --rm
-  act --job marked-fares-worked --rm
   @echo 'ok'
 
 # ⭐️ runs the tests (with stubs/mocks)
@@ -55,10 +54,6 @@ gen-statics:
 # generate awardwiz/dist directory for frontend (used by Github Actions when deploying)
 gen-frontend-dist:
   just run-vite build
-
-# run the marked fares worker (looks at watches fares and sends notifications when availability changes)
-run-marked-fares-worker:
-  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/marked-fares.ts
 
 run-award-alerts-evaluator:
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
