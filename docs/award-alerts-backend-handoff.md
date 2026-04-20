@@ -14,6 +14,7 @@ This is the current intended direction:
 - CLI management plus an unauthenticated internal Express admin API
 - one persistent server as the intended runtime
 - a single-process service entrypoint that owns the HTTP server plus evaluator/notifier loops
+- SIGTERM and SIGINT now close that service entrypoint gracefully before loop drain
 - Discord webhook delivery instead of email for the new alert backend
 - Alaska as the first provider, with the provider implementation now fully owned inside the generic backend boundary
 
@@ -39,6 +40,7 @@ Compared with the older in-progress alert work, the major changes are:
 14. The evaluator worker now shares a default provider builder with the future service path instead of maintaining its own local Alaska provider wiring.
 15. An internal Express API now exposes health, CRUD/admin, status, run, and notification endpoints for the award-alerts service without adding auth middleware or public-facing deployment concerns.
 16. A unified service entrypoint now opens SQLite, constructs the repository, starts the evaluator/notifier loops in-process, and serves the internal Express API from one runtime.
+17. The service shutdown path now quiesces intake first, then drains loops, and the direct-run process path waits for the returned close handle on SIGTERM/SIGINT.
 
 ## Current Ownership Boundaries
 

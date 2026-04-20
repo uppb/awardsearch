@@ -35,12 +35,13 @@ export const createLoopRunner = ({
   let timer: ReturnType<typeof setTimeout> | undefined
   let runningPromise: Promise<void> | undefined
   let stopped = true
+  let shutdownRequested = false
   let lastStartedAt: string | undefined
   let lastCompletedAt: string | undefined
   let lastError: string | undefined
 
   const scheduleNext = () => {
-    if (stopped)
+    if (stopped || shutdownRequested)
       return
 
     if (timer)
@@ -53,6 +54,9 @@ export const createLoopRunner = ({
   }
 
   const trigger = async (_source: LoopRunnerSource): Promise<LoopRunnerTriggerResult> => {
+    if (shutdownRequested)
+      throw new Error(`[${name}] loop is shutting down`)
+
     if (runningPromise)
       return { started: false, reason: "already_running" }
 
@@ -70,7 +74,7 @@ export const createLoopRunner = ({
       } finally {
         lastCompletedAt = now().toISOString()
         runningPromise = undefined
-        if (!stopped)
+        if (!stopped && !shutdownRequested)
           scheduleNext()
       }
     })()
@@ -80,6 +84,9 @@ export const createLoopRunner = ({
 
   return {
     start() {
+      if (shutdownRequested)
+        return
+
       if (!stopped && (timer || runningPromise))
         return
 
@@ -88,7 +95,12 @@ export const createLoopRunner = ({
         scheduleNext()
     },
 
+    beginShutdown() {
+      shutdownRequested = true
+    },
+
     async stop() {
+      shutdownRequested = true
       stopped = true
 
       if (timer) {

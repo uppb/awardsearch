@@ -7,7 +7,7 @@ import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite
 import type { AwardAlert, NotificationEvent } from "../../../awardwiz/backend/award-alerts/types.js"
 import { runEvaluatorWorker } from "../../../awardwiz/workers/award-alerts-evaluator.js"
 import { runNotifierWorker } from "../../../awardwiz/workers/award-alerts-notifier.js"
-import { startAwardAlertsService } from "../../../awardwiz/workers/award-alerts-service.js"
+import { createAwardAlertsServiceShutdownController, startAwardAlertsService } from "../../../awardwiz/workers/award-alerts-service.js"
 import type { FlightWithFares } from "../../../awardwiz/types/scrapers.js"
 
 const createDbPath = () => join(mkdtempSync(join(tmpdir(), "award-alert-workers-")), "alerts.sqlite")
@@ -459,5 +459,81 @@ describe("award alert workers", () => {
       deferred.resolve()
       await closeService().catch(() => undefined)
     }
+  })
+
+  it("runs the notifier loop automatically in the unified service runtime", async () => {
+    vi.useFakeTimers()
+
+    const dbPath = createDbPath()
+    const db = openAwardAlertsDb(dbPath)
+    const repository = new SqliteAwardAlertsRepository(db)
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: vi.fn().mockResolvedValue(""),
+    })
+
+    try {
+      repository.insertAlert(buildAlert())
+      repository.createNotificationEvent(buildPendingNotificationEvent())
+    } finally {
+      db.close()
+    }
+
+    const service = await startAwardAlertsService({
+      databasePath: dbPath,
+      port: 0,
+      evaluatorIntervalMs: 60 * 60 * 1000,
+      notifierIntervalMs: 100,
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+    })
+
+    try {
+      expect(fetchFn).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchFn).toHaveBeenCalledOnce()
+      expect(fetchFn).toHaveBeenCalledWith("https://discord.test/webhook", expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "content-type": "application/json",
+        }),
+      }))
+
+      const statusResponse = await fetch(`${service.baseUrl}/api/award-alerts/status`)
+      expect(await statusResponse.json()).toMatchObject({
+        notifier: expect.objectContaining({
+          lastStartedAt: expect.any(String),
+          lastCompletedAt: expect.any(String),
+        }),
+      })
+    } finally {
+      await service.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it("awaits shutdown after SIGTERM or SIGINT is received", async () => {
+    const service = {
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const onceHandlers = new Map<string, () => void>()
+    const removeListener = vi.fn()
+    const shutdown = createAwardAlertsServiceShutdownController(service, {
+      once: (signal, handler) => {
+        onceHandlers.set(signal, handler)
+      },
+      removeListener,
+    })
+
+    onceHandlers.get("SIGTERM")?.()
+    await shutdown.waitForShutdown
+
+    expect(service.close).toHaveBeenCalledOnce()
+    expect(removeListener).toHaveBeenCalledWith("SIGTERM", expect.any(Function))
+    expect(removeListener).toHaveBeenCalledWith("SIGINT", expect.any(Function))
   })
 })

@@ -31,9 +31,70 @@ export type RunningAwardAlertsService = {
   close: () => Promise<void>
 }
 
+export type AwardAlertsServiceShutdownController = {
+  waitForShutdown: Promise<void>
+  dispose: () => void
+}
+
+export type AwardAlertsServiceShutdownControllerDeps = {
+  once?: (signal: NodeJS.Signals, handler: () => void) => void
+  removeListener?: (signal: NodeJS.Signals, handler: () => void) => void
+}
+
 const parseIntervalMs = (value: string | undefined, fallback: number) => {
   const parsed = value ? Number.parseInt(value, 10) : Number.NaN
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+export const createAwardAlertsServiceShutdownController = (
+  service: Pick<RunningAwardAlertsService, "close">,
+  {
+    once = (signal, handler) => process.once(signal, handler),
+    removeListener = (signal, handler) => process.removeListener(signal, handler),
+  }: AwardAlertsServiceShutdownControllerDeps = {},
+): AwardAlertsServiceShutdownController => {
+  let settled = false
+  let resolveShutdown!: () => void
+  let rejectShutdown!: (error: unknown) => void
+  const handlers = new Map<NodeJS.Signals, () => void>()
+
+  const waitForShutdown = new Promise<void>((resolve, reject) => {
+    resolveShutdown = resolve
+    rejectShutdown = reject
+  })
+
+  const dispose = () => {
+    for (const [signal, handler] of handlers)
+      removeListener(signal, handler)
+    handlers.clear()
+  }
+
+  const handleSignal = (signal: NodeJS.Signals) => {
+    if (settled)
+      return
+
+    settled = true
+    void service.close()
+      .then(() => {
+        dispose()
+        resolveShutdown()
+      })
+      .catch((error: unknown) => {
+        dispose()
+        rejectShutdown(error)
+      })
+  }
+
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    const handler = () => handleSignal(signal)
+    handlers.set(signal, handler)
+    once(signal, handler)
+  }
+
+  return {
+    waitForShutdown,
+    dispose,
+  }
 }
 
 export const startAwardAlertsService = async ({
@@ -120,17 +181,32 @@ export const startAwardAlertsService = async ({
         return
       closed = true
 
-      await evaluatorLoop.stop()
-      await notifierLoop.stop()
+      evaluatorLoop.beginShutdown()
+      notifierLoop.beginShutdown()
 
-      await new Promise<void>((resolve, reject) => {
-        server.close(error => error ? reject(error) : resolve())
-      })
-
-      db.close()
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.close(error => error ? reject(error) : resolve())
+        })
+      } finally {
+        await evaluatorLoop.stop()
+        await notifierLoop.stop()
+        db.close()
+      }
     },
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
-  await startAwardAlertsService()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const service = await startAwardAlertsService()
+  const shutdown = createAwardAlertsServiceShutdownController(service)
+
+  try {
+    await shutdown.waitForShutdown
+  } catch (error) {
+    process.exitCode = 1
+    console.error(error)
+  } finally {
+    shutdown.dispose()
+  }
+}
