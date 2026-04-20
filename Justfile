@@ -42,16 +42,6 @@ lets-upgrade-packages:
 gen-json-schemas: build
   npm exec -- typescript-json-schema tsconfig.json ScrapersConfig --topRef --noExtraProps | sed 's/import.*)\.//g' > config.schema.json
 
-run-award-alerts-evaluator:
-  if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
-    DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || printf '%s' /usr/sbin/chromium)}" xvfb-run -a npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/award-alerts-evaluator.ts; \
-  else \
-    DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/award-alerts-evaluator.ts; \
-  fi
-
-run-award-alerts-notifier:
-  DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/award-alerts-notifier.ts
-
 run-award-alerts-service: build
   mkdir -p "$(dirname "${DATABASE_PATH:-./tmp/award-alerts.sqlite}")"
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
@@ -62,15 +52,6 @@ run-award-alerts-service: build
 
 build-award-alerts-service-docker tag="awardwiz:award-alerts":
   docker buildx build --file ./awardwiz/backend/award-alerts/Dockerfile -t {{tag}} .
-
-award-alerts-cli *ARGS='':
-  DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/backend/award-alerts/cli.ts {{ARGS}}
-
-run-alaska-alerts-evaluator:
-  just run-award-alerts-evaluator
-
-run-alaska-alerts-notifier:
-  just run-award-alerts-notifier
 
 ##############################
 # SCRAPERS
@@ -87,47 +68,3 @@ run-scraper scraper origin destination date: build
 # runs live anti-botting tests online against a variety of websites bot fingerprinting websites (EXPERIMENTAL and still doesn't fully succeed)
 run-live-botting-tests: build
   node --enable-source-maps dist/arkalis/test-anti-botting.js
-
-##############################
-# DEPLOYMENT (you probably don't need these, they're more for deploying awardwiz.com)
-##############################
-
-# # build the scrapers docker image for running locally
-# [private]
-# build-docker debug="1" tag=localtag platform=dockerarch: build
-#   docker buildx build --file ./awardwiz-scrapers/Dockerfile -t {{tag}} --platform "linux/{{platform}}" --build-arg DEBUG={{debug}} ./
-
-# # 9229 is for node debugger, 8282 is for the vnc web server. be aware this uploads your .env file and tmp/ directory
-# [private]
-# run-docker extra="": build-docker
-#   docker run -it --rm -p 8282:8282 -p 9229:9229 --volume $(pwd)/.env:/usr/src/awardwiz/.env:ro --volume $(pwd)/tmp:/usr/src/awardwiz/tmp {{extra}}
-
-# # build arkalis docker image
-# [private]
-# build-arkalis-docker:
-#   docker buildx build --platform=linux/{{dockerarch}} --file ./arkalis/Dockerfile -t "arkalis" ./
-
-# # build, deploy and run in prod
-# [private]
-# deploy-prod tag="registry.kub.lg.io:31119/awardwiz:scrapers" platform=dockerarch kubectl-deployment="-n awardwiz deployment/awardwiz": (build-docker "0" tag platform)
-#   docker push {{tag}}
-#   kubectl rollout restart {{kubectl-deployment}}
-#   kubectl rollout status {{kubectl-deployment}}
-
-# # tail logs in production on k8s
-# [private]
-# tail-prod-logs:
-#   #!/bin/bash
-#   while true; do
-#     kubectl logs -l app=awardwiz --follow --all-containers --max-log-requests=50 --tail=5 | grep --line-buffered -v 'health-check'
-#     sleep 1
-#   done
-
-# [private]
-# test-anti-botting-prod:
-#   @just build-docker "1" "registry.kub.lg.io:31119/awardwiz:test" dockerarch
-#   docker push "registry.kub.lg.io:31119/awardwiz:test"
-#   kubectl run arkalis-test-anti-botting \
-#     --rm --restart=Never --pod-running-timeout=30s --attach --stdin \
-#     --image=registry.kub.lg.io:31119/awardwiz:test --image-pull-policy=Always \
-#     -- node --enable-source-maps dist/arkalis/test-anti-botting.js

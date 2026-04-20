@@ -1,6 +1,6 @@
 # Award Alerts Testing Strategy
 
-This document is the testing reference for the `award-alerts` backend and HTTP service work.
+This document is the testing reference for the `award-alerts` backend and combined HTTP service runtime.
 
 It exists for two reasons:
 
@@ -11,11 +11,11 @@ It exists for two reasons:
 
 The `award-alerts` testing strategy should prove:
 
-- alert CRUD behavior is correct
+- alert CRUD behavior is correct through the HTTP API
 - SQLite schema and migrations are safe
-- evaluator and notifier logic still behave correctly
+- evaluator and notifier logic still behave correctly inside the combined service
 - the HTTP API matches the documented contract
-- the single-process service runtime does not overlap runs incorrectly
+- the single-container service runtime does not overlap runs incorrectly
 - known live Alaska availability can be exercised end to end
 
 ## Test Layers
@@ -72,7 +72,7 @@ They should verify:
 - pause/resume behavior
 - preview behavior without persistence
 - operational status read models
-- manual evaluator/notifier trigger behavior
+- manual evaluator/notifier trigger behavior through the service API surface
 
 Expected file:
 
@@ -149,10 +149,18 @@ npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 ```
 
-If the service runtime is part of the change, also run a local manual check:
+If the service runtime is part of the change, also run a local container smoke check:
 
 ```bash
-DATABASE_PATH=./tmp/award-alerts.sqlite DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/test/test just run-award-alerts-service
+docker build -f ./awardwiz/backend/award-alerts/Dockerfile -t awardwiz:award-alerts .
+docker run --rm -p 2233:2233 \
+  -e DATABASE_PATH=/data/award-alerts.sqlite \
+  -e AWARD_ALERTS_PORT=2233 \
+  -e AWARD_ALERTS_EVALUATOR_INTERVAL_MS=60000 \
+  -e AWARD_ALERTS_NOTIFIER_INTERVAL_MS=60000 \
+  -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/test/test \
+  -v "$(pwd)/tmp:/data" \
+  awardwiz:award-alerts
 ```
 
 Then exercise:

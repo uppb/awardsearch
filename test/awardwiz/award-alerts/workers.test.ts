@@ -5,8 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import { SqliteAwardAlertsRepository } from "../../../awardwiz/backend/award-alerts/sqlite-repository.js"
 import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite.js"
 import type { AwardAlert, NotificationEvent } from "../../../awardwiz/backend/award-alerts/types.js"
-import { runEvaluatorWorker } from "../../../awardwiz/workers/award-alerts-evaluator.js"
-import { runNotifierWorker } from "../../../awardwiz/workers/award-alerts-notifier.js"
+import { runEvaluatorWorker, runNotifierWorker } from "../../../awardwiz/backend/award-alerts/runtime-workers.js"
 import { createAwardAlertsServiceShutdownController, startAwardAlertsService } from "../../../awardwiz/workers/award-alerts-service.js"
 import type { FlightWithFares } from "../../../awardwiz/types/scrapers.js"
 
@@ -354,7 +353,7 @@ describe("award alert workers", () => {
         }),
       }))
 
-      const { runEvaluatorWorker } = await import("../../../awardwiz/workers/award-alerts-evaluator.js")
+      const { runEvaluatorWorker } = await import("../../../awardwiz/backend/award-alerts/runtime-workers.js")
 
       await runEvaluatorWorker({
         databasePath: dbPath,

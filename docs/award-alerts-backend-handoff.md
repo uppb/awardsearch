@@ -11,8 +11,8 @@ This is the current intended direction:
 
 - generic alert runtime under `award-alerts`, not Alaska-specific naming
 - SQLite as the durable store and single-server coordination mechanism
-- CLI management plus an unauthenticated internal Express admin API
-- one persistent server as the intended runtime
+- API-only management through an unauthenticated internal Express admin API
+- one persistent container as the intended runtime
 - a single-process service entrypoint that owns the HTTP server plus evaluator/notifier loops
 - OpenAPI and human-readable API docs that describe the internal admin surface
 - a dedicated Docker runtime for the combined service entrypoint
@@ -31,24 +31,24 @@ Compared with the older in-progress alert work, the major changes are:
 2. Runtime moved from frontend-owned / Firebase-shaped flows to a backend-owned service.
 3. Notifications for the new backend moved from email to a shared Discord webhook.
 4. Naming moved from `alaska-alerts` to generic `award-alerts`.
-5. Alert management moved to a backend CLI instead of frontend writes.
-6. Production intent moved to one persistent server instead of GitHub-hosted worker cadence.
+5. Alert management moved to the backend HTTP API instead of frontend writes.
+6. Production intent moved to one persistent container instead of GitHub-hosted worker cadence.
 7. The Alaska scraper path was updated to use the live Alaska results flow, and the backend runtime now surfaces real Arkalis/plugin failures instead of mislabeling them as “no results”.
 8. The Alaska provider cleanup retired the old `backend/alaska-alerts` runtime boundary as an active dependency.
-9. Alert input validation now lives in a shared helper module used by the CLI and future API-facing entrypoints, including date/default handling and core domain validation for cabins, intervals, and rule limits.
+9. Alert input validation now lives in a shared helper module used by the API and future API-facing entrypoints, including date/default handling and core domain validation for cabins, intervals, and rule limits.
 10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 11. Legacy v1 SQLite databases still open and migrate to v2 on startup before the nullable schema takes effect.
 12. The repository surface now supports in-place alert updates plus alert-scoped run and notification history inspection.
 13. A service/application layer now sits above the repository and owns CRUD, provider-aware preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet; date-range previews fan out provider searches in parallel rather than serially awaiting each date.
 14. The evaluator worker now shares a default provider builder with the future service path instead of maintaining its own local Alaska provider wiring.
 15. An internal Express API now exposes health, CRUD/admin, status, run, and notification endpoints for the award-alerts service without adding auth middleware or public-facing deployment concerns.
-16. A unified service entrypoint now opens SQLite, constructs the repository, starts the evaluator/notifier loops in-process, and serves the internal Express API from one runtime.
+16. A unified service entrypoint now opens SQLite, constructs the repository, starts the evaluator/notifier loops in-process, and serves the internal Express API from one container runtime.
 17. The service shutdown path now quiesces intake first, then drains loops, and the direct-run process path waits for the returned close handle on SIGTERM/SIGINT.
 18. Armed scheduled loop timers are cleared as soon as shutdown begins so late callback delivery cannot surface as an unhandled rejection.
 19. The internal admin API now has a checked-in OpenAPI contract plus a human-readable guide for local/operator use.
 20. A dedicated Dockerfile now exists for the combined service runtime instead of relying on the split worker entrypoints.
 21. The internal admin API now exposes a raw scraper batch endpoint for one-off validation calls, returning per-item Arkalis-wrapped scraper responses without mutating alert state.
-22. The old browser-facing scraper HTTP server and browser search product have been retired; operator validation now goes through `just run-award-alerts-service`, `just run-scraper`, and `POST /api/award-alerts/operations/run-scraper`.
+22. The old browser-facing scraper HTTP server and browser search product have been retired; operator validation now goes through the admin API, `just run-scraper`, and `POST /api/award-alerts/operations/run-scraper`.
 
 ## Current Ownership Boundaries
 
@@ -66,9 +66,6 @@ These files are the primary backend surface:
 - `awardwiz/backend/award-alerts/service.ts`
 - `awardwiz/workers/award-alerts-service.ts`
 - `awardwiz/backend/award-alerts/providers/index.ts`
-- `awardwiz/backend/award-alerts/cli.ts`
-- `awardwiz/workers/award-alerts-evaluator.ts`
-- `awardwiz/workers/award-alerts-notifier.ts`
 
 What they own:
 
@@ -82,7 +79,7 @@ What they own:
 - internal HTTP routing for health, CRUD/admin, status, and operational endpoints
 - notification event queueing
 - Discord delivery
-- CLI administration
+- API-only administration
 
 ### Internal Express API
 
@@ -204,20 +201,6 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts \
   }'
 ```
 
-The CLI still works for local/admin use:
-
-```bash
-just award-alerts-cli create \
-  --program alaska \
-  --origin SHA \
-  --destination HND \
-  --date 2026-05-02 \
-  --cabin business \
-  --max-miles 35000
-```
-
-`--user-id` is still accepted, but it is optional.
-
 Supported scope:
 
 - single date
@@ -231,7 +214,7 @@ Supported scope:
 
 ### Evaluate alerts
 
-`awardwiz/workers/award-alerts-evaluator.ts`:
+The evaluator loop in the combined `award-alerts` service:
 
 1. opens the SQLite DB
 2. claims due alerts
@@ -265,7 +248,7 @@ Current reality:
 
 ### Send notifications
 
-`awardwiz/workers/award-alerts-notifier.ts`:
+The notifier loop in the combined `award-alerts` service:
 
 1. opens the SQLite DB
 2. claims pending notification events
@@ -290,7 +273,7 @@ Recommended for deployed runtime:
 - `AWARD_ALERTS_EVALUATOR_INTERVAL_MS`
 - `AWARD_ALERTS_NOTIFIER_INTERVAL_MS`
 
-Required for the combined service runtime and the notifier worker:
+Required for the combined service runtime:
 
 - `DISCORD_WEBHOOK_URL`
 
@@ -307,7 +290,7 @@ Required for live Alaska scraping:
 
 Important operational assumption:
 
-- this service runs as one persistent server with persistent disk and in-process loops
+- this service runs as one persistent container with persistent volume storage and in-process loops
 
 It is not designed as a distributed multi-runner system. SQLite is the coordination layer, so multiple independent machines would be the wrong deployment shape.
 
@@ -316,9 +299,9 @@ It is not designed as a distributed multi-runner system. SQLite is the coordinat
 Useful local commands:
 
 ```bash
-just award-alerts-cli list
-just award-alerts-cli show <alert-id>
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
 just run-award-alerts-service
+docker build -f ./awardwiz/backend/award-alerts/Dockerfile -t awardwiz:award-alerts .
 just build-award-alerts-service-docker
 just run-scraper alaska SHA HND 2026-05-02
 ```
@@ -336,8 +319,8 @@ npm exec tsc -- --noEmit
 Implemented now:
 
 - generic alert model with `program`
-- internal admin HTTP CRUD plus CLI create/list/show/pause/resume/delete
-- shared alert validation for CLI and future API-facing input flows
+- internal admin HTTP CRUD plus pause/resume/delete
+- shared alert validation for API and future API-facing input flows
 - optional `userId` handling in alert input models
 - SQLite schema and migrations
 - SQLite-backed claim logic for alerts and notification events
@@ -387,7 +370,7 @@ What is legacy:
 What is current:
 
 - Alaska search and matching live under `awardwiz/backend/award-alerts/providers/alaska/`
-- the persistent server model is the implemented production runtime
+- the persistent container model is the implemented production runtime
 - operator guidance now lives in `docs/award-alerts-operations.md`
 
 ## Important Recent Fix
@@ -410,4 +393,4 @@ If another engineer is continuing from here, the highest-value next tasks are:
 
 1. decide whether to add auth before exposing the service outside a trusted network
 2. add the next provider only after the provider interface and operational model are proven stable
-3. keep the backend, worker, CLI, and scraper-debug docs/tests aligned if the runtime surface changes again
+3. keep the backend, worker, and scraper-debug docs/tests aligned if the runtime surface changes again

@@ -1,18 +1,12 @@
 # Award Alerts Operations
 
 This is the canonical operator runbook for the SQLite + Discord `award-alerts` backend.
-The intended deployment model is one persistent service process, either under `systemd` or in one container.
-
-Supported operator paths today are:
-
-- `just run-award-alerts-service`
-- `just run-scraper`
-- `POST /api/award-alerts/operations/run-scraper`
+The supported production model is one persistent service process running in one Docker container.
 
 ## Runtime Model
 
 - one persistent service process
-- one SQLite database on persistent disk
+- one SQLite database on persistent disk or volume storage
 - one embedded evaluator loop
 - one embedded notifier loop
 - one internal unauthenticated admin HTTP API
@@ -23,68 +17,18 @@ New alerts default to:
 - `poll_interval_minutes = 1`
 - `min_notification_interval_minutes = 10`
 
-## Example Environment File
+## Local Development Helpers
 
-Place the runtime env file somewhere stable on the host, such as `/etc/awardwiz/award-alerts.env`.
-
-```bash
-DATABASE_PATH=/var/lib/awardwiz/award-alerts.sqlite
-AWARD_ALERTS_PORT=2233
-AWARD_ALERTS_EVALUATOR_INTERVAL_MS=60000
-AWARD_ALERTS_NOTIFIER_INTERVAL_MS=60000
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-DISCORD_USERNAME=AwardWiz
-DISCORD_AVATAR_URL=https://example.com/awardwiz-avatar.png
-CHROME_PATH=/usr/bin/chromium
-```
-
-`DATABASE_PATH` must point at persistent storage. The default `./tmp/award-alerts.sqlite` fallback is for local development only.
-
-## systemd Service
-
-### `/etc/systemd/system/award-alerts.service`
-
-```ini
-[Unit]
-Description=AwardWiz award alerts service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/awardwiz
-EnvironmentFile=/etc/awardwiz/award-alerts.env
-ExecStart=/usr/bin/env bash -lc 'if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; else node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; fi'
-Restart=always
-RestartSec=5
-KillSignal=SIGTERM
-TimeoutStopSec=120
-
-[Install]
-WantedBy=multi-user.target
-```
-
-The direct-run service entrypoint handles `SIGTERM` and `SIGINT` by closing the HTTP server first, rejecting new manual loop triggers, clearing armed loop timers, and then draining the evaluator/notifier loops before SQLite shutdown.
-
-## Enable And Inspect
+These commands are for local development only. They are not the production deployment model.
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now award-alerts.service
-systemctl status award-alerts.service
-journalctl -u award-alerts.service -n 200 --no-pager
-```
-
-## Local Service Commands
-
-```bash
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
 just run-award-alerts-service
-just award-alerts-cli list
 curl -sS http://127.0.0.1:2233/health
 curl -sS http://127.0.0.1:2233/api/award-alerts/status
 ```
 
-Manual operational endpoints:
+Manual loop triggers:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
@@ -123,36 +67,85 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
 
 ## Docker Runtime
 
+The container image is the supported production path.
+
+The image contract is explicit:
+
+- the service listens on `2233`
+- `DATABASE_PATH` points at `/data/award-alerts.sqlite`
+- `/data` must be backed by a persistent Docker volume or host mount
+- `DISCORD_WEBHOOK_URL` is required for notifier delivery
+- `AWARD_ALERTS_EVALUATOR_INTERVAL_MS` and `AWARD_ALERTS_NOTIFIER_INTERVAL_MS` default to `60000`
+
 Build:
 
 ```bash
-just build-award-alerts-service-docker
+docker build -f ./awardwiz/backend/award-alerts/Dockerfile -t awardwiz:award-alerts .
 ```
 
-Example run:
+Run:
 
 ```bash
-docker run --rm -p 2233:2233 \
+docker run --rm -d --name award-alerts -p 2233:2233 \
   -e DATABASE_PATH=/data/award-alerts.sqlite \
-  -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
   -e AWARD_ALERTS_PORT=2233 \
-  -v "$(pwd)/tmp:/data" \
+  -e PORT=2233 \
+  -e AWARD_ALERTS_EVALUATOR_INTERVAL_MS=60000 \
+  -e AWARD_ALERTS_NOTIFIER_INTERVAL_MS=60000 \
+  -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
+  -v award-alerts-data:/data \
   awardwiz:award-alerts
 ```
 
-The container image uses the dedicated `awardwiz/backend/award-alerts/Dockerfile` and starts the combined service entrypoint.
+Smoke requests:
+
+```bash
+curl -sS http://127.0.0.1:2233/health
+curl -sS http://127.0.0.1:2233/api/award-alerts/status
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
+  -H 'content-type: application/json' \
+  -d '{
+    "program":"alaska",
+    "origin":"SHA",
+    "destination":"HND",
+    "startDate":"2026-05-01",
+    "endDate":"2026-05-03",
+    "cabin":"business",
+    "maxMiles":35000
+  }'
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-scraper \
+  -H 'content-type: application/json' \
+  -d '{
+    "scraperName":"alaska",
+    "items":[
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-02" },
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-03" }
+    ]
+  }'
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts \
+  -H 'content-type: application/json' \
+  -d '{
+    "program":"alaska",
+    "origin":"SHA",
+    "destination":"HND",
+    "date":"2026-05-02",
+    "cabin":"business",
+    "maxMiles":35000
+  }'
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
+```
 
 ## SQLite Persistence And Backup
 
-- Keep the SQLite file on persistent disk.
+- Keep the SQLite file on persistent disk or a persistent Docker volume.
 - Do not place the database on ephemeral instance storage if you expect alerts, state, or notification events to survive a restart.
 - Back up the SQLite file regularly.
-- Prefer a backup workflow that stops the service or otherwise avoids copying the file while it is actively being written.
-- Treat the SQLite database as the coordination layer for a single host, not a shared multi-host datastore.
+- Prefer a backup workflow that stops the container or otherwise avoids copying the file while it is actively being written.
+- Treat the SQLite database as the coordination layer for a single container or single host, not a shared multi-host datastore.
 
 ## Chromium And Xvfb
 
-- The evaluator runs live Alaska scraping, so Chromium or Chrome must be installed on the host or available in the container image.
+- The evaluator runs live Alaska scraping, so Chromium or Chrome must be available in the container image.
 - Set `CHROME_PATH` if autodiscovery is unreliable or if the binary lives in a nonstandard location.
 - On headless Linux, install `xvfb-run` or provide another usable display solution.
 - The `just run-award-alerts-service` target uses `xvfb-run` automatically when `DISPLAY` is unset and `xvfb-run` is available.
@@ -163,4 +156,4 @@ The container image uses the dedicated `awardwiz/backend/award-alerts/Dockerfile
 - Write endpoints require a non-empty JSON object body.
 - The raw scraper batch endpoint is for validation/debugging only and does not persist anything to SQLite.
 - The notifier posts to one shared Discord webhook and uses at-most-once delivery semantics for ambiguous webhook outcomes.
-- The single-process persistent service model is the canonical production path. GitHub Actions and split evaluator/notifier timers are no longer the intended runtime.
+- The combined container runtime is the canonical production model. GitHub Actions is no longer the intended runtime for evaluator/notifier loops.

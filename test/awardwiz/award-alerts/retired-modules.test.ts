@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
 const retiredModulePaths = [
+  "../../../awardwiz/backend/award-alerts/cli.ts",
   "../../../awardwiz/backend/alaska-alerts/alaska-search.ts",
   "../../../awardwiz/backend/alaska-alerts/date-scope.ts",
   "../../../awardwiz/backend/alaska-alerts/evaluator.ts",
@@ -14,10 +15,12 @@ const retiredModulePaths = [
   "../../../awardwiz/backend/alaska-alerts/scheduler.ts",
   "../../../awardwiz/workers/alaska-alerts-evaluator.ts",
   "../../../awardwiz/workers/alaska-alerts-notifier.ts",
+  "../../../awardwiz/workers/award-alerts-evaluator.ts",
+  "../../../awardwiz/workers/award-alerts-notifier.ts",
 ].map(path => fileURLToPath(new URL(path, import.meta.url)))
 
-describe("retired Alaska modules", () => {
-  it("removes the retired legacy runtime and Firestore module files", () => {
+describe("retired award alerts runtime surfaces", () => {
+  it("removes the retired legacy and runtime module files", () => {
     for (const path of retiredModulePaths)
       expect(existsSync(path)).toBe(false)
   })

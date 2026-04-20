@@ -1,12 +1,13 @@
-AwardWiz is a TypeScript monorepo centered on the internal `award-alerts` service, the CLI and worker runtime around it, the Arkalis scraper layer, and the scraper debug path.
+AwardWiz is a TypeScript monorepo centered on the internal `award-alerts` service, the combined runtime that serves it, the Arkalis scraper layer, and the scraper debug path.
 
-The old browser search product has been retired from this branch. This README now documents the surviving backend, worker, CLI, and debug surfaces only.
+The old browser search product has been retired from this branch. This README now documents the surviving backend, runtime, and debug surfaces only.
 
 ## Current Capabilities
 
 - Runs the selected scrapers through Arkalis, a CDP-based Chromium automation layer built for this project.
 - Normalizes scraper output into shared response shapes and applies provider-specific Alaska matching rules in the backend.
-- Exposes a SQLite-backed `award-alerts` backend with an internal admin HTTP API, in-process evaluator/notifier loops, and Discord notification delivery.
+- Exposes a SQLite-backed `award-alerts` backend with an internal admin HTTP API, in-process evaluator/notifier loops, and Discord notification delivery in one combined service runtime.
+- Supports container-first deployment as the intended production path for that service.
 - Keeps `just run-scraper` as the local one-off scraper debug path.
 
 ## Important Limitations
@@ -37,9 +38,9 @@ Defined but currently disabled in `config.json`:
 
 ## Repo Layout
 
-- `awardwiz/backend/award-alerts/`: generic SQLite-backed alert backend, CLI, scheduler, evaluator, notifier, and provider adapters.
-- `awardwiz/workers/`: combined service entrypoint plus worker runtimes.
-- `awardwiz-scrapers/`: CLI debug entry point, scraper modules, and typed airline response shapes.
+- `awardwiz/backend/award-alerts/`: generic SQLite-backed alert backend, scheduler, evaluator, notifier, HTTP API, and provider adapters.
+- `awardwiz/workers/`: combined service entrypoint for the `award-alerts` runtime.
+- `awardwiz-scrapers/`: scraper debug entry point, scraper modules, and typed airline response shapes.
 - `arkalis/`: internal Chromium/CDP automation layer used by the scrapers.
 - `test/awardwiz/`: backend, provider, worker, and scraper-debug tests.
 - `docs/`: implementation notes for specific parts of the system.
@@ -82,27 +83,79 @@ Run the combined lint/build/test checks:
 just check
 ```
 
-Run the internal award-alerts service:
+Run the internal award-alerts service for local development:
 
 ```bash
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
 just run-award-alerts-service
 ```
 
-Run one scraper locally through the CLI debug entry point:
+Run one scraper locally through the scraper debug entry point:
 
 ```bash
 just run-scraper aa SFO LAX 2026-07-01
 ```
 
-### Workers
+### Award Alerts Runtime
 
-- `DATABASE_PATH`: Required for deployed `award-alerts` CLI and worker runtime, and it should point to persistent disk on the host. The `./tmp/award-alerts.sqlite` fallback is only a local-development convenience.
-- `AWARD_ALERTS_PORT`: HTTP port for the combined `award-alerts` service runtime. Defaults to `2233`.
+- `DATABASE_PATH`: Required for the combined `award-alerts` service runtime. It should point to persistent disk for deployment; in Docker, mount `/data` persistently and use `DATABASE_PATH=/data/award-alerts.sqlite`. The `./tmp/award-alerts.sqlite` fallback is only a local-development convenience.
+- `AWARD_ALERTS_PORT`: HTTP port for the combined service runtime. The worker entrypoint defaults to `2233`, and the container/wrapper setup also sets `2233` explicitly.
+- `PORT`: Mirrors `AWARD_ALERTS_PORT` for container compatibility. Set it to `2233` in Docker.
 - `AWARD_ALERTS_EVALUATOR_INTERVAL_MS`: Evaluator loop cadence for the combined service runtime. Defaults to `60000`.
 - `AWARD_ALERTS_NOTIFIER_INTERVAL_MS`: Notifier loop cadence for the combined service runtime. Defaults to `60000`.
-- `DISCORD_WEBHOOK_URL`: Required by the combined `award-alerts` service entrypoint and by `awardwiz/workers/award-alerts-notifier.ts`.
-- `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/award-alerts-notifier.ts`.
-- `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/award-alerts-notifier.ts`.
+- `DISCORD_WEBHOOK_URL`: Required by the combined `award-alerts` service runtime.
+- `DISCORD_USERNAME`: Optional Discord webhook username override.
+- `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override.
+
+### Docker Deployment
+
+Use these commands on a machine with Docker installed:
+
+```bash
+docker build -f ./awardwiz/backend/award-alerts/Dockerfile -t awardwiz:award-alerts .
+docker run --rm -d --name award-alerts -p 2233:2233 \
+  -e DATABASE_PATH=/data/award-alerts.sqlite \
+  -e AWARD_ALERTS_PORT=2233 \
+  -e PORT=2233 \
+  -e AWARD_ALERTS_EVALUATOR_INTERVAL_MS=60000 \
+  -e AWARD_ALERTS_NOTIFIER_INTERVAL_MS=60000 \
+  -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
+  -v award-alerts-data:/data \
+  awardwiz:award-alerts
+curl -sS http://127.0.0.1:2233/health
+curl -sS http://127.0.0.1:2233/api/award-alerts/status
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
+  -H 'content-type: application/json' \
+  -d '{
+    "program":"alaska",
+    "origin":"SHA",
+    "destination":"HND",
+    "startDate":"2026-05-01",
+    "endDate":"2026-05-03",
+    "cabin":"business",
+    "maxMiles":35000
+  }'
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-scraper \
+  -H 'content-type: application/json' \
+  -d '{
+    "scraperName":"alaska",
+    "items":[
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-02" },
+      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-03" }
+    ]
+  }'
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts \
+  -H 'content-type: application/json' \
+  -d '{
+    "program":"alaska",
+    "origin":"SHA",
+    "destination":"HND",
+    "date":"2026-05-02",
+    "cabin":"business",
+    "maxMiles":35000
+  }'
+curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
+```
 
 ### Arkalis / Scraper Runtime
 
@@ -116,25 +169,20 @@ just run-scraper aa SFO LAX 2026-07-01
 
 The legacy Firestore/email marked-fares worker runtime has been removed from this branch. The only maintained alert backend is `award-alerts`:
 
-- It lives under `awardwiz/backend/award-alerts/` and `awardwiz/workers/award-alerts-*.ts`.
+- It lives under `awardwiz/backend/award-alerts/` and the `awardwiz/workers/award-alerts-service.ts` combined runtime.
 - It uses one SQLite database file for alert definitions, state, run history, and notification events.
-- It exposes an unauthenticated internal admin API plus the CLI:
-  - `just run-award-alerts-service`
+- It exposes an unauthenticated internal admin API:
   - `GET /health`
   - `POST /api/award-alerts`
   - `POST /api/award-alerts/operations/preview`
   - `POST /api/award-alerts/operations/run-evaluator`
   - `POST /api/award-alerts/operations/run-notifier`
   - `POST /api/award-alerts/operations/run-scraper`
-- CLI management still exists for local/admin use:
-  - `just award-alerts-cli list`
-  - `just award-alerts-cli create --program alaska --origin SFO --destination HNL --date 2026-07-01 --cabin business`
-  - `just award-alerts-cli show <alert-id>`
 - New alerts default to `poll_interval_minutes=1` and `min_notification_interval_minutes=10` unless explicitly overridden at creation time.
 - The evaluator worker claims due alerts from SQLite, runs provider-specific search/match logic, and enqueues pending Discord notification events.
 - The notifier worker claims pending notification events from SQLite and posts them to one shared Discord webhook.
 - Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
-- Persistent single-process service execution is the intended production model for this service. Set `DATABASE_PATH` to a persistent host path for that runtime; the default `./tmp/award-alerts.sqlite` fallback is for local development only. GitHub Actions is no longer the intended runtime for evaluator/notifier loops. See [docs/award-alerts-api.md](docs/award-alerts-api.md), [docs/award-alerts-operations.md](docs/award-alerts-operations.md), and [docs/award-alerts-testing.md](docs/award-alerts-testing.md).
+- Persistent single-container service execution is the intended production model for this service. Set `DATABASE_PATH` to a persistent volume path for that runtime; the default `./tmp/award-alerts.sqlite` fallback is for local development only. GitHub Actions is no longer the intended runtime for evaluator/notifier loops. See [docs/award-alerts-api.md](docs/award-alerts-api.md), [docs/award-alerts-operations.md](docs/award-alerts-operations.md), and [docs/award-alerts-testing.md](docs/award-alerts-testing.md).
 - Alaska is the first provider, but the runtime surface is generic under `award-alerts`.
 
 ## Arkalis Summary

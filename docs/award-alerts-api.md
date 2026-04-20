@@ -355,6 +355,7 @@ Notification statuses:
 Start the service:
 
 ```bash
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
 just run-award-alerts-service
 ```
 

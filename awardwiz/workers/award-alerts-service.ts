@@ -8,8 +8,7 @@ import { createAwardAlertsService } from "../backend/award-alerts/service.js"
 import { createAwardAlertsApp } from "../backend/award-alerts/server.js"
 import { SqliteAwardAlertsRepository } from "../backend/award-alerts/sqlite-repository.js"
 import { openAwardAlertsDb } from "../backend/award-alerts/sqlite.js"
-import { runEvaluatorWorker } from "./award-alerts-evaluator.js"
-import { runNotifierWorker } from "./award-alerts-notifier.js"
+import { runEvaluatorWorker, runNotifierWorker } from "../backend/award-alerts/runtime-workers.js"
 import type { AwardAlertProviders } from "../backend/award-alerts/types.js"
 import type { LoopRunnerLogger } from "../backend/award-alerts/loop-runner.js"
 
@@ -99,7 +98,7 @@ export const createAwardAlertsServiceShutdownController = (
 
 export const startAwardAlertsService = async ({
   databasePath = process.env["DATABASE_PATH"] ?? "./tmp/award-alerts.sqlite",
-  port = Number.parseInt(process.env["AWARD_ALERTS_PORT"] ?? process.env["PORT"] ?? "3000", 10),
+  port = Number.parseInt(process.env["AWARD_ALERTS_PORT"] ?? process.env["PORT"] ?? "2233", 10),
   evaluatorIntervalMs = parseIntervalMs(process.env["AWARD_ALERTS_EVALUATOR_INTERVAL_MS"], 60_000),
   notifierIntervalMs = parseIntervalMs(process.env["AWARD_ALERTS_NOTIFIER_INTERVAL_MS"], 60_000),
   providers = buildDefaultAwardAlertProviders(),

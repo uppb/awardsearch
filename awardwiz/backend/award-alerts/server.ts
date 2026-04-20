@@ -66,6 +66,6 @@ export function createAwardAlertsApp({ service }: AwardAlertsServerDeps): Expres
   return app
 }
 
-export function startAwardAlertsServer({ service }: AwardAlertsServerDeps, port = Number(process.env["PORT"] ?? 3000)) {
+export function startAwardAlertsServer({ service }: AwardAlertsServerDeps, port = Number(process.env["PORT"] ?? 2233)) {
   return createAwardAlertsApp({ service }).listen(port)
 }
