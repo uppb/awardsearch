@@ -134,6 +134,11 @@ function assertDate(value: string, fieldName: string) {
   }
 }
 
+function assertOptionalString(value: unknown, fieldName: string) {
+  if (value !== undefined && typeof value !== "string")
+    throw new Error(`${fieldName} must be a string when provided`)
+}
+
 function resolveDateSelection(input: DateInput, fallback?: DateFallback): DateSelection {
   const hasSingleDate = typeof input.date === "string"
   const hasStartDate = typeof input.startDate === "string"
@@ -235,6 +240,9 @@ export function buildAlertFromInput({
 
 export function applyAlertPatch(alert: AwardAlert, patch: AwardAlertPatchInput, now: Date): AwardAlert {
   const nowIso = now.toISOString()
+  assertOptionalString(patch.date, "date")
+  assertOptionalString(patch.startDate, "startDate")
+  assertOptionalString(patch.endDate, "endDate")
   const mergedInput: AwardAlertWriteInput = {
     program: alert.program,
     userId: mergeClearableField(patch.userId, alert.userId),

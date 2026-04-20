@@ -164,4 +164,39 @@ describe("award alert validation", () => {
       generateId: () => "alert-test-id",
     })).toThrow("Invalid non-negative number for maxCash: NaN")
   })
+
+  it("rejects non-string patch date values instead of treating them as omitted", () => {
+    const baseAlert: AwardAlert = {
+      id: "alert-1",
+      program: "alaska",
+      userId: undefined,
+      origin: "SHA",
+      destination: "HND",
+      dateMode: "single_date",
+      date: "2026-05-02",
+      cabin: "business",
+      nonstopOnly: false,
+      maxMiles: 35000,
+      maxCash: undefined,
+      active: true,
+      pollIntervalMinutes: 1,
+      minNotificationIntervalMinutes: 10,
+      lastCheckedAt: undefined,
+      nextCheckAt: "2026-04-20T00:00:00.000Z",
+      createdAt: "2026-04-20T00:00:00.000Z",
+      updatedAt: "2026-04-20T00:00:00.000Z",
+    }
+
+    expect(() => applyAlertPatch(
+      baseAlert,
+      { date: null as unknown as string },
+      new Date("2026-04-20T00:05:00.000Z"),
+    )).toThrow("date must be a string when provided")
+
+    expect(() => applyAlertPatch(
+      baseAlert,
+      { startDate: null as unknown as string, active: false },
+      new Date("2026-04-20T00:05:00.000Z"),
+    )).toThrow("startDate must be a string when provided")
+  })
 })
