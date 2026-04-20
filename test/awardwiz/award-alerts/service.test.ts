@@ -204,6 +204,29 @@ describe("award alerts service", () => {
     expect(alerts.size).toBe(0)
   })
 
+  it("rejects unsupported programs before persisting alerts", async () => {
+    const { repository } = createRepository()
+    const service = createAwardAlertsService({
+      repository,
+      providers: {},
+      now: () => new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-1",
+      runtimeStatus: () => ({ evaluator: { running: false }, notifier: { running: false } }),
+      runEvaluator: vi.fn(),
+      runNotifier: vi.fn(),
+    })
+
+    await expect(service.createAlert({
+      program: "aeroplan",
+      origin: "SHA",
+      destination: "HND",
+      date: "2026-05-02",
+      cabin: "business",
+    })).rejects.toThrow("unsupported award program: aeroplan")
+
+    expect(repository.insertAlert).not.toHaveBeenCalled()
+  })
+
   it("returns alert runs and notification history from the repository", async () => {
     const { repository, runs, notifications } = createRepository()
     runs.set("alert-1", [createRun()])

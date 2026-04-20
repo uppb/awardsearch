@@ -12,7 +12,6 @@ import type { FlightWithFares } from "../../types/scrapers.js"
 import {
   applyAlertPatch,
   buildAlertFromInput,
-  buildPreviewAlertFromInput,
   type AwardAlertPatchInput,
   type AwardAlertWriteInput,
 } from "./validation.js"
@@ -48,23 +47,28 @@ export type AwardAlertsServiceDependencies = {
 
 const unsupportedProviderMessage = (program: string) => `unsupported award program: ${program}`
 
+const assertSupportedProvider = (providers: AwardAlertProviders, program: string) => {
+  const provider = providers[program]
+  if (!provider)
+    throw new Error(unsupportedProviderMessage(program))
+  return provider
+}
+
 const searchProviderForPreview = async ({
   alert,
   providers,
 }: {
-  alert: ReturnType<typeof buildPreviewAlertFromInput>
+  alert: AwardAlert
   providers: AwardAlertProviders
 }): Promise<AwardAlertMatchEvaluation> => {
-  const provider = providers[alert.program]
-  if (!provider)
-    throw new Error(unsupportedProviderMessage(alert.program))
+  const provider = assertSupportedProvider(providers, alert.program)
 
   const searchedDates = expandAlertDates(alert)
   const flights: FlightWithFares[] = []
   for (const departureDate of searchedDates)
     flights.push(...await provider.search({ origin: alert.origin, destination: alert.destination, departureDate }))
 
-  return provider.evaluateMatches(alert as unknown as AwardAlert, flights)
+  return provider.evaluateMatches(alert, flights)
 }
 
 export const createAwardAlertsService = ({
@@ -81,6 +85,7 @@ export const createAwardAlertsService = ({
   getAlert: (id: string) => repository.getAlert(id),
 
   async createAlert(input: AwardAlertWriteInput) {
+    assertSupportedProvider(providers, input.program)
     const alert = buildAlertFromInput({ input, now: now(), generateId })
     repository.insertAlert(alert)
     return alert
@@ -124,7 +129,11 @@ export const createAwardAlertsService = ({
   },
 
   async previewAlert(input: AwardAlertWriteInput) {
-    const alert = buildPreviewAlertFromInput(input)
+    const alert = buildAlertFromInput({
+      input,
+      now: now(),
+      generateId: () => "__preview__",
+    })
     return searchProviderForPreview({ alert, providers })
   },
 

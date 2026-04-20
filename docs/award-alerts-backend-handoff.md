@@ -34,7 +34,7 @@ Compared with the older in-progress alert work, the major changes are:
 10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 11. Legacy v1 SQLite databases still open and migrate to v2 on startup before the nullable schema takes effect.
 12. The repository surface now supports in-place alert updates plus alert-scoped run and notification history inspection.
-13. A service/application layer now sits above the repository and owns CRUD, preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet.
+13. A service/application layer now sits above the repository and owns CRUD, provider-aware preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet.
 14. The evaluator worker now shares a default provider builder with the future service path instead of maintaining its own local Alaska provider wiring.
 
 ## Current Ownership Boundaries
