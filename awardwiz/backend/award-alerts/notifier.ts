@@ -1,10 +1,10 @@
 import type { NotificationEvent } from "./types.js"
 
 export type NotificationRepository = {
-  markNotificationAttempting: (id: string, attemptedAt: string, claimToken: string | undefined) => Promise<void>
-  markNotificationSent: (id: string, sentAt: string, claimToken?: string) => Promise<void>
-  markNotificationDeliveredUnconfirmed: (id: string, reason: string, claimToken?: string) => Promise<void>
-  markNotificationFailed: (id: string, reason: string, claimToken?: string) => Promise<void>
+  markNotificationAttempting: (id: string, attemptedAt: string, claimToken: string | undefined) => void | Promise<void>
+  markNotificationSent: (id: string, sentAt: string, claimToken?: string) => void | Promise<void>
+  markNotificationDeliveredUnconfirmed: (id: string, reason: string, claimToken?: string) => void | Promise<void>
+  markNotificationFailed: (id: string, reason: string, claimToken?: string) => void | Promise<void>
 }
 
 export type DiscordWebhookResponse = {

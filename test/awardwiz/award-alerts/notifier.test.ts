@@ -85,15 +85,55 @@ describe("sendNotificationEvent", () => {
       embeds: [{
         title: "Award alert: SFO → HNL",
         url: event.payload.bookingUrl,
-        fields: expect.arrayContaining([
+        fields: [
           expect.objectContaining({ name: "Route", value: "SFO → HNL" }),
           expect.objectContaining({ name: "Matched dates", value: "2026-07-01" }),
-          expect.objectContaining({ name: "Booking link" }),
-          expect.objectContaining({ name: "Limits" }),
-          expect.objectContaining({ name: "Best match" }),
-        ]),
+          expect.objectContaining({
+            name: "Booking link",
+            value: `[Open booking link](${event.payload.bookingUrl})`,
+          }),
+          expect.objectContaining({
+            name: "Limits",
+            value: "Nonstop only | 90,000 miles | 10 cash",
+          }),
+          expect.objectContaining({
+            name: "Best match",
+            value: expect.stringContaining("AS 843 on 2026-07-01"),
+          }),
+        ],
       }],
     })
+  })
+
+  it("marks the event delivered_unconfirmed when Discord accepts the webhook but sent-status persistence fails", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: vi.fn().mockResolvedValue(""),
+    })
+    const repository = {
+      markNotificationAttempting: vi.fn().mockResolvedValue(undefined),
+      markNotificationSent: vi.fn().mockRejectedValue(new Error("write failed")),
+      markNotificationDeliveredUnconfirmed: vi.fn().mockResolvedValue(undefined),
+      markNotificationFailed: vi.fn().mockResolvedValue(undefined),
+    }
+
+    await sendNotificationEvent({
+      event,
+      repository,
+      now: new Date("2026-04-18T06:05:00.000Z"),
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+    })
+
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
+    expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
+    expect(repository.markNotificationDeliveredUnconfirmed).toHaveBeenCalledWith(
+      "event-1",
+      expect.stringContaining("Discord accepted the webhook but sent-status persistence failed"),
+      "claim-1",
+    )
+    expect(repository.markNotificationFailed).not.toHaveBeenCalled()
   })
 
   it("marks the event as failed when the Discord webhook returns a non-2xx response", async () => {
