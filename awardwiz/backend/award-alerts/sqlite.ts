@@ -1,5 +1,7 @@
 import Database from "better-sqlite3"
 
+const latestSupportedVersion = 1
+
 const SCHEMA_V1_SQL = `
   CREATE TABLE award_alerts (
     id TEXT PRIMARY KEY,
@@ -263,10 +265,13 @@ const applyMigrationV1 = (db: Database.Database) => {
 const runMigrations = (db: Database.Database) => {
   const currentVersion = db.pragma("user_version", { simple: true }) as number
 
-  if (currentVersion < 1) {
+  if (currentVersion > latestSupportedVersion)
+    throw new Error(`award alerts SQLite database version ${currentVersion} is newer than the latest supported version ${latestSupportedVersion}`)
+
+  if (currentVersion < latestSupportedVersion) {
     db.transaction(() => {
       applyMigrationV1(db)
-      db.pragma("user_version = 1")
+      db.pragma(`user_version = ${latestSupportedVersion}`)
     })()
     return
   }
@@ -274,11 +279,20 @@ const runMigrations = (db: Database.Database) => {
   assertSchemaV1(db)
 }
 
+const configurePragmas = (db: Database.Database) => {
+  db.pragma("journal_mode = WAL")
+  if (db.pragma("journal_mode", { simple: true }) !== "wal")
+    throw new Error("award alerts SQLite database failed to enable WAL mode")
+
+  db.pragma("foreign_keys = ON")
+  if (db.pragma("foreign_keys", { simple: true }) !== 1)
+    throw new Error("award alerts SQLite database failed to enable foreign key enforcement")
+}
+
 export const openAwardAlertsDb = (filename: string) => {
   const db = new Database(filename)
   try {
-    db.pragma("journal_mode = WAL")
-    db.pragma("foreign_keys = ON")
+    configurePragmas(db)
     runMigrations(db)
     return db
   } catch (error) {

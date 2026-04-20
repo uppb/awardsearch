@@ -59,6 +59,20 @@ const seedDriftedSchema = (dbPath: string, userVersion: 0 | 1) => {
   }
 }
 
+const seedLaterSchemaObject = (dbPath: string, userVersion: 0 | 1) => {
+  const db = new Database(dbPath)
+  try {
+    db.exec(`
+      CREATE TABLE award_alert_runs (
+        id TEXT
+      );
+    `)
+    db.pragma(`user_version = ${userVersion}`)
+  } finally {
+    db.close()
+  }
+}
+
 describe("openAwardAlertsDb", () => {
   it("creates the expected v1 schema and pragmas", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
@@ -214,6 +228,21 @@ describe("openAwardAlertsDb", () => {
     }
   })
 
+  it("rejects databases newer than the latest supported version", () => {
+    const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
+    const dbPath = join(dir, "alerts.sqlite")
+    seedDriftedSchema(dbPath, 1)
+
+    const db = new Database(dbPath)
+    try {
+      db.pragma("user_version = 2")
+    } finally {
+      db.close()
+    }
+
+    expect(() => openAwardAlertsDb(dbPath)).toThrow("award alerts SQLite database version 2 is newer than the latest supported version 1")
+  })
+
   it("rejects a drifted schema that is already marked version 1", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
@@ -222,16 +251,24 @@ describe("openAwardAlertsDb", () => {
     expect(() => openAwardAlertsDb(dbPath)).toThrow("award alerts SQLite schema does not match v1")
   })
 
-  it("does not mark a failed migration as version 1", () => {
+  it("rolls back partial migration work when a later table already exists", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
-    seedDriftedSchema(dbPath, 0)
+    seedLaterSchemaObject(dbPath, 0)
 
-    expect(() => openAwardAlertsDb(dbPath)).toThrow("table award_alerts already exists")
+    expect(() => openAwardAlertsDb(dbPath)).toThrow("table award_alert_runs already exists")
 
     const db = new Database(dbPath)
     try {
       expect(db.pragma("user_version", { simple: true })).toBe(0)
+      expect(getSqlByName(db, "table")).toStrictEqual({
+        award_alert_runs: normalizeSql(`
+          CREATE TABLE award_alert_runs (
+            id TEXT
+          )
+        `),
+      })
+      expect(getSqlByName(db, "index")).toStrictEqual({})
     } finally {
       db.close()
     }
