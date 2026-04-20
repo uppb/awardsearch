@@ -1,7 +1,7 @@
 import Database from "better-sqlite3"
 
-const MIGRATIONS = [
-  `
+const MIGRATION_V1 = (db: Database.Database) => {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS award_alerts (
       id TEXT PRIMARY KEY,
       program TEXT NOT NULL,
@@ -24,55 +24,63 @@ const MIGRATIONS = [
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-  `,
-  `
+
     CREATE INDEX IF NOT EXISTS idx_award_alerts_active_next_check_at
     ON award_alerts(active, next_check_at);
-  `,
-  `
+
     CREATE TABLE IF NOT EXISTS award_alert_state (
-      alert_id TEXT PRIMARY KEY,
+      alert_id TEXT PRIMARY KEY REFERENCES award_alerts(id) ON DELETE CASCADE,
       state TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-  `,
-  `
+
     CREATE TABLE IF NOT EXISTS award_alert_runs (
       id TEXT PRIMARY KEY,
-      alert_id TEXT NOT NULL,
+      alert_id TEXT NOT NULL REFERENCES award_alerts(id),
       started_at TEXT NOT NULL,
       completed_at TEXT,
       status TEXT NOT NULL,
-      error TEXT,
-      FOREIGN KEY (alert_id) REFERENCES award_alerts(id)
+      error TEXT
     );
-  `,
-  `
+
     CREATE INDEX IF NOT EXISTS idx_award_alert_runs_alert_id_completed_at
     ON award_alert_runs(alert_id, completed_at);
-  `,
-  `
+
     CREATE TABLE IF NOT EXISTS notification_events (
       id TEXT PRIMARY KEY,
-      alert_id TEXT NOT NULL,
+      alert_id TEXT NOT NULL REFERENCES award_alerts(id),
       status TEXT NOT NULL,
       claimed_at TEXT,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (alert_id) REFERENCES award_alerts(id)
+      updated_at TEXT NOT NULL
     );
-  `,
-  `
+
     CREATE INDEX IF NOT EXISTS idx_notification_events_status_claimed_at_created_at
     ON notification_events(status, claimed_at, created_at);
-  `,
-]
+  `)
+}
+
+const MIGRATIONS = [
+  { version: 1, apply: MIGRATION_V1 },
+] as const
+
+const runMigrations = (db: Database.Database) => {
+  const currentVersion = db.pragma("user_version", { simple: true }) as number
+  for (const migration of MIGRATIONS) {
+    if (currentVersion >= migration.version)
+      continue
+
+    db.transaction(() => {
+      migration.apply(db)
+      db.pragma(`user_version = ${migration.version}`)
+    })()
+  }
+}
 
 export const openAwardAlertsDb = (filename: string) => {
   const db = new Database(filename)
   db.pragma("journal_mode = WAL")
   db.pragma("foreign_keys = ON")
-  for (const migration of MIGRATIONS)
-    db.exec(migration)
+  runMigrations(db)
   return db
 }
