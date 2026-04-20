@@ -155,7 +155,6 @@ Optional for the browser app:
 
 ### Workers
 
-- `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
 - `DATABASE_PATH`: Required for deployed `award-alerts` CLI and worker runtime, and it should point to persistent disk on the host. The `./tmp/award-alerts.sqlite` fallback is only a local-development convenience.
 - `AWARD_ALERTS_PORT`: HTTP port for the combined `award-alerts` service runtime. Defaults to `2233`.
 - `AWARD_ALERTS_EVALUATOR_INTERVAL_MS`: Evaluator loop cadence for the combined service runtime. Defaults to `60000`.
