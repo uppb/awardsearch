@@ -155,6 +155,85 @@ describe("award alert workers", () => {
     }
   })
 
+  it("runEvaluatorWorker supports alerts and notification events without a userId", async () => {
+    const dbPath = createDbPath()
+    const db = openAwardAlertsDb(dbPath)
+    const repository = new SqliteAwardAlertsRepository(db)
+    const matchingFlight: FlightWithFares = {
+      flightNo: "AS 843",
+      departureDateTime: "2026-07-01 19:42",
+      arrivalDateTime: "2026-07-01 22:11",
+      origin: "SFO",
+      destination: "HNL",
+      duration: 329,
+      aircraft: "Airbus A321",
+      segmentCount: 1,
+      amenities: { hasPods: false, hasWiFi: true },
+      fares: [
+        { cabin: "business", miles: 80000, cash: 5.6, currencyOfCash: "USD", scraper: "alaska", bookingClass: "D", isSaverFare: false },
+      ],
+    }
+
+    try {
+      repository.insertAlert(buildAlert({ userId: undefined }))
+
+      await runEvaluatorWorker({
+        databasePath: dbPath,
+        now: new Date("2026-04-19T00:00:00.000Z"),
+        providers: {
+          alaska: {
+            search: async () => [matchingFlight],
+            evaluateMatches: () => ({
+              hasMatch: true,
+              matchedDates: ["2026-07-01"],
+              matchingResults: [{
+                date: "2026-07-01",
+                flightNo: "AS 843",
+                origin: "SFO",
+                destination: "HNL",
+                departureDateTime: "2026-07-01 19:42",
+                arrivalDateTime: "2026-07-01 22:11",
+                cabin: "business",
+                miles: 80000,
+                cash: 5.6,
+                currencyOfCash: "USD",
+                bookingClass: "D",
+                segmentCount: 1,
+              }],
+              bestMatchSummary: {
+                date: "2026-07-01",
+                flightNo: "AS 843",
+                origin: "SFO",
+                destination: "HNL",
+                departureDateTime: "2026-07-01 19:42",
+                arrivalDateTime: "2026-07-01 22:11",
+                cabin: "business",
+                miles: 80000,
+                cash: 5.6,
+                currencyOfCash: "USD",
+                bookingClass: "D",
+                segmentCount: 1,
+              },
+              matchFingerprint: "fp-null-user",
+              bookingUrl: "https://example.test/booking",
+            }),
+          },
+        },
+      })
+
+      expect(repository.getState("alert-1")).toMatchObject({
+        hasMatch: true,
+        lastNotifiedAt: "2026-04-19T00:00:00.000Z",
+      })
+      expect(db.prepare("SELECT user_id, status FROM notification_events WHERE alert_id = ?").get("alert-1")).toEqual({
+        user_id: null,
+        status: "pending",
+      })
+    } finally {
+      db.close()
+    }
+  })
+
   it("runNotifierWorker can process claimed notification events through an injected repository", async () => {
     const event = {
       ...buildPendingNotificationEvent(),

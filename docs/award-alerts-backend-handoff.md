@@ -31,7 +31,7 @@ Compared with the older in-progress alert work, the major changes are:
 7. The Alaska scraper path was updated to use the live Alaska results flow, and the backend runtime now surfaces real Arkalis/plugin failures instead of mislabeling them as “no results”.
 8. The Alaska provider cleanup retired the old `backend/alaska-alerts` runtime boundary as an active dependency.
 9. Alert input validation now lives in a shared helper module used by the CLI and future API-facing entrypoints.
-10. `userId` is optional in alert input handling, so alert creation can omit it when the caller does not have a user-scoped identity.
+10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 
 ## Current Ownership Boundaries
 
@@ -88,6 +88,7 @@ Important fields:
 ### `award_alerts`
 
 - `program`
+- `user_id` is nullable in the current SQLite schema
 - `origin`
 - `destination`
 - `date_mode`
@@ -124,6 +125,7 @@ Important fields:
 
 ### `notification_events`
 
+- `user_id` is nullable in the current SQLite schema
 - `pending`
 - `processing`
 - `sent`

@@ -303,6 +303,30 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
+  it("persists alerts and notification events without a userId", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert({ userId: undefined }))
+      expect(repo.getAlert("alert-1")).toEqual(buildAlert({ userId: undefined }))
+
+      repo.createNotificationEvent(buildEvent({
+        id: "event-null-user",
+        userId: undefined,
+      }))
+
+      expect(db.prepare("SELECT user_id FROM award_alerts WHERE id = ?").get("alert-1")).toEqual({
+        user_id: null,
+      })
+      expect(db.prepare("SELECT user_id FROM notification_events WHERE id = ?").get("event-null-user")).toEqual({
+        user_id: null,
+      })
+      expect(repo.claimPendingNotificationEvents("2026-04-19T00:20:00.000Z", 10, 5)).toHaveLength(1)
+    } finally {
+      db.close()
+    }
+  })
+
   it("finalizes stale attempted processing events instead of reclaiming them", async () => {
     const { db, repo } = openRepository()
 

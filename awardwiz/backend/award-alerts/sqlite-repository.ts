@@ -15,7 +15,7 @@ import type {
 type AwardAlertRow = {
   id: string
   program: string
-  user_id: string
+  user_id: string | null
   origin: string
   destination: string
   date_mode: AwardAlert["dateMode"]
@@ -52,7 +52,7 @@ type AwardAlertStateRow = {
 type NotificationEventRow = {
   id: string
   alert_id: string
-  user_id: string
+  user_id: string | null
   created_at: string
   status: NotificationEventStatus
   claimed_at: string | null
@@ -77,7 +77,7 @@ const mapAlertRow = (row: AwardAlertRow): AwardAlert => {
   const base = {
     id: row.id,
     program: row.program,
-    userId: row.user_id,
+    userId: row.user_id ?? undefined,
     origin: row.origin,
     destination: row.destination,
     cabin: row.cabin,
@@ -133,7 +133,7 @@ const mapStateRow = (row: AwardAlertStateRow): AwardAlertState => ({
 const mapNotificationEventRow = (row: NotificationEventRow): NotificationEvent => ({
   id: row.id,
   alertId: row.alert_id,
-  userId: row.user_id,
+  userId: row.user_id ?? undefined,
   createdAt: row.created_at,
   status: row.status,
   claimedAt: row.claimed_at ?? undefined,
@@ -206,7 +206,7 @@ export class SqliteAwardAlertsRepository {
     `).run({
       id: alert.id,
       program: alert.program,
-      user_id: alert.userId,
+      user_id: alert.userId ?? null,
       origin: alert.origin,
       destination: alert.destination,
       date_mode: alert.dateMode,
@@ -342,7 +342,7 @@ export class SqliteAwardAlertsRepository {
     `).run({
       id: event.id,
       alert_id: event.alertId,
-      user_id: event.userId,
+      user_id: event.userId ?? null,
       created_at: event.createdAt,
       status: event.status,
       claimed_at: event.claimedAt ?? null,

@@ -73,8 +73,164 @@ const seedLaterSchemaObject = (dbPath: string, userVersion: 0 | 1) => {
   }
 }
 
+const seedLegacyV1Schema = (dbPath: string) => {
+  const db = new Database(dbPath)
+  try {
+    db.exec(`
+      CREATE TABLE award_alerts (
+        id TEXT PRIMARY KEY NOT NULL,
+        program TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        origin TEXT NOT NULL,
+        destination TEXT NOT NULL,
+        date_mode TEXT NOT NULL CHECK (date_mode IN ('single_date', 'date_range')),
+        date TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        cabin TEXT NOT NULL CHECK (cabin IN ('economy', 'business', 'first')),
+        nonstop_only INTEGER NOT NULL CHECK (nonstop_only IN (0, 1)),
+        max_miles INTEGER,
+        max_cash REAL,
+        active INTEGER NOT NULL CHECK (active IN (0, 1)),
+        poll_interval_minutes INTEGER NOT NULL CHECK (poll_interval_minutes > 0),
+        min_notification_interval_minutes INTEGER NOT NULL CHECK (min_notification_interval_minutes > 0),
+        last_checked_at TEXT,
+        next_check_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK (
+          (
+            (
+              date_mode = 'single_date'
+              AND date IS NOT NULL
+              AND start_date IS NULL
+              AND end_date IS NULL
+            )
+            OR
+            (
+              date_mode = 'date_range'
+              AND date IS NULL
+              AND start_date IS NOT NULL
+              AND end_date IS NOT NULL
+            )
+          )
+          AND (active = 0 OR next_check_at IS NOT NULL)
+        )
+      );
+
+      CREATE INDEX idx_award_alerts_active_next_check_at
+      ON award_alerts(active, next_check_at);
+
+      CREATE TABLE award_alert_state (
+        alert_id TEXT PRIMARY KEY NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
+        has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
+        matched_dates TEXT,
+        matching_results TEXT,
+        best_match_summary TEXT,
+        match_fingerprint TEXT,
+        last_match_at TEXT,
+        last_notified_at TEXT,
+        last_error_at TEXT,
+        last_error_message TEXT,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE award_alert_runs (
+        id TEXT PRIMARY KEY NOT NULL,
+        alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        searched_dates TEXT,
+        scrape_count INTEGER NOT NULL DEFAULT 0 CHECK (scrape_count >= 0),
+        scrape_success_count INTEGER NOT NULL DEFAULT 0 CHECK (scrape_success_count >= 0),
+        scrape_error_count INTEGER NOT NULL DEFAULT 0 CHECK (scrape_error_count >= 0),
+        matched_result_count INTEGER NOT NULL DEFAULT 0 CHECK (matched_result_count >= 0),
+        has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
+        error_summary TEXT
+      );
+
+      CREATE INDEX idx_award_alert_runs_alert_id_completed_at
+      ON award_alert_runs(alert_id, completed_at);
+
+      CREATE TABLE notification_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
+        claimed_at TEXT,
+        claim_token TEXT,
+        attempted_at TEXT,
+        payload TEXT NOT NULL,
+        sent_at TEXT,
+        failure_reason TEXT
+      );
+
+      CREATE INDEX idx_notification_events_status_claimed_at_created_at
+      ON notification_events(status, claimed_at, created_at);
+    `)
+
+    db.prepare(`
+      INSERT INTO award_alerts (
+        id, program, user_id, origin, destination, date_mode, date, start_date, end_date, cabin,
+        nonstop_only, max_miles, max_cash, active, poll_interval_minutes, min_notification_interval_minutes,
+        last_checked_at, next_check_at, created_at, updated_at
+      ) VALUES (
+        @id, @program, @user_id, @origin, @destination, @date_mode, @date, @start_date, @end_date, @cabin,
+        @nonstop_only, @max_miles, @max_cash, @active, @poll_interval_minutes, @min_notification_interval_minutes,
+        @last_checked_at, @next_check_at, @created_at, @updated_at
+      )
+    `).run({
+      id: "alert-1",
+      program: "alaska",
+      user_id: "user-1",
+      origin: "SFO",
+      destination: "HNL",
+      date_mode: "single_date",
+      date: "2026-07-01",
+      start_date: null,
+      end_date: null,
+      cabin: "economy",
+      nonstop_only: 1,
+      max_miles: null,
+      max_cash: null,
+      active: 1,
+      poll_interval_minutes: 15,
+      min_notification_interval_minutes: 60,
+      last_checked_at: null,
+      next_check_at: "2026-04-19T00:00:00.000Z",
+      created_at: "2026-04-19T00:00:00.000Z",
+      updated_at: "2026-04-19T00:00:00.000Z",
+    })
+
+    db.prepare(`
+      INSERT INTO notification_events (
+        id, alert_id, user_id, created_at, status, claimed_at, claim_token, attempted_at, payload, sent_at, failure_reason
+      ) VALUES (
+        @id, @alert_id, @user_id, @created_at, @status, @claimed_at, @claim_token, @attempted_at, @payload, @sent_at, @failure_reason
+      )
+    `).run({
+      id: "event-1",
+      alert_id: "alert-1",
+      user_id: "user-1",
+      created_at: "2026-04-19T00:00:00.000Z",
+      status: "pending",
+      claimed_at: null,
+      claim_token: null,
+      attempted_at: null,
+      payload: "{}",
+      sent_at: null,
+      failure_reason: null,
+    })
+
+    db.pragma("user_version = 1")
+  } finally {
+    db.close()
+  }
+}
+
 describe("openAwardAlertsDb", () => {
-  it("creates the expected v1 schema and pragmas", () => {
+  it("creates the expected v2 schema and pragmas", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
 
@@ -87,7 +243,7 @@ describe("openAwardAlertsDb", () => {
       }).toStrictEqual({
         journal_mode: "wal",
         foreign_keys: 1,
-        user_version: 1,
+        user_version: 2,
       })
       expect(getSqlByName(db, "table")).toStrictEqual({
         award_alert_runs: normalizeSql(`
@@ -124,7 +280,7 @@ describe("openAwardAlertsDb", () => {
           CREATE TABLE award_alerts (
             id TEXT PRIMARY KEY NOT NULL,
             program TEXT NOT NULL,
-            user_id TEXT NOT NULL,
+            user_id TEXT,
             origin TEXT NOT NULL,
             destination TEXT NOT NULL,
             date_mode TEXT NOT NULL CHECK (date_mode IN ('single_date', 'date_range')),
@@ -156,7 +312,7 @@ describe("openAwardAlertsDb", () => {
           CREATE TABLE notification_events (
             id TEXT PRIMARY KEY NOT NULL,
             alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
-            user_id TEXT NOT NULL,
+            user_id TEXT,
             created_at TEXT NOT NULL,
             status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
             claimed_at TEXT,
@@ -182,6 +338,48 @@ describe("openAwardAlertsDb", () => {
           ON notification_events(status, claimed_at, created_at)
         `),
       })
+    } finally {
+      db.close()
+    }
+  })
+
+  it("migrates a v1 database to v2 and keeps user_id nullable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
+    const dbPath = join(dir, "alerts.sqlite")
+    seedLegacyV1Schema(dbPath)
+
+    const db = openAwardAlertsDb(dbPath)
+    try {
+      expect(db.pragma("user_version", { simple: true })).toBe(2)
+      expect(db.prepare("SELECT user_id FROM award_alerts WHERE id = ?").get("alert-1")).toEqual({
+        user_id: "user-1",
+      })
+      expect(db.prepare("SELECT user_id FROM notification_events WHERE id = ?").get("event-1")).toEqual({
+        user_id: "user-1",
+      })
+      expect(() => db.prepare(`
+        INSERT INTO award_alerts (
+          id, program, user_id, origin, destination, date_mode, date, cabin, nonstop_only, active, poll_interval_minutes, min_notification_interval_minutes, next_check_at, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+      `).run(
+        "alert-null-user",
+        "alaska",
+        null,
+        "SFO",
+        "HNL",
+        "single_date",
+        "2026-07-01",
+        "economy",
+        1,
+        1,
+        30,
+        60,
+        "2026-04-19T00:00:00.000Z",
+        "2026-04-19T00:00:00.000Z",
+        "2026-04-19T00:00:00.000Z",
+      )).not.toThrow()
     } finally {
       db.close()
     }
@@ -237,7 +435,7 @@ describe("openAwardAlertsDb", () => {
       expect(() => db.prepare("INSERT INTO award_alerts (id, program, user_id, origin, destination, date_mode, cabin, nonstop_only, active, poll_interval_minutes, min_notification_interval_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
         null,
         "any-provider",
-        "user-1",
+        null,
         "SFO",
         "HNL",
         "single_date",
