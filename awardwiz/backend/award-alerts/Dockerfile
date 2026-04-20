@@ -2,7 +2,6 @@
 FROM mcr.microsoft.com/playwright:v1.32.0
 
 ENV CHROME_PATH=/ms-playwright/chromium-1055/chrome-linux/chrome
-ENV NODE_ENV=production
 ENV AWARD_ALERTS_PORT=2233
 ENV PORT=2233
 
@@ -13,6 +12,8 @@ RUN npm ci
 
 COPY . .
 RUN npm exec tsc
+
+ENV NODE_ENV=production
 
 EXPOSE 2233
 

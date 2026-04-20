@@ -407,36 +407,57 @@
         "required": ["error"]
       },
       "AwardAlertWriteInput": {
-        "type": "object",
-        "description": "Non-empty JSON object required.",
-        "properties": {
-          "program": { "type": "string", "example": "alaska" },
-          "userId": { "type": "string" },
-          "origin": { "type": "string", "example": "SHA" },
-          "destination": { "type": "string", "example": "HND" },
-          "date": { "type": "string", "format": "date" },
-          "startDate": { "type": "string", "format": "date" },
-          "endDate": { "type": "string", "format": "date" },
-          "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
-          "nonstopOnly": { "type": "boolean" },
-          "maxMiles": { "type": "integer", "minimum": 0 },
-          "maxCash": { "type": "number", "minimum": 0 },
-          "pollIntervalMinutes": { "type": "integer", "minimum": 1 },
-          "minNotificationIntervalMinutes": { "type": "integer", "minimum": 1 },
-          "active": { "type": "boolean" }
-        },
-        "required": ["program", "origin", "destination", "cabin"]
+        "description": "Non-empty JSON object required. Exactly one of `date` or `startDate`+`endDate` must be supplied.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "program": { "type": "string", "example": "alaska" },
+              "userId": { "type": "string" },
+              "origin": { "type": "string", "example": "SHA" },
+              "destination": { "type": "string", "example": "HND" },
+              "date": { "type": "string", "format": "date" },
+              "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+              "nonstopOnly": { "type": "boolean" },
+              "maxMiles": { "type": "integer", "minimum": 0 },
+              "maxCash": { "type": "number", "minimum": 0 },
+              "pollIntervalMinutes": { "type": "integer", "minimum": 1 },
+              "minNotificationIntervalMinutes": { "type": "integer", "minimum": 1 },
+              "active": { "type": "boolean" }
+            },
+            "required": ["program", "origin", "destination", "date", "cabin"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "program": { "type": "string", "example": "alaska" },
+              "userId": { "type": "string" },
+              "origin": { "type": "string", "example": "SHA" },
+              "destination": { "type": "string", "example": "HND" },
+              "startDate": { "type": "string", "format": "date" },
+              "endDate": { "type": "string", "format": "date" },
+              "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
+              "nonstopOnly": { "type": "boolean" },
+              "maxMiles": { "type": "integer", "minimum": 0 },
+              "maxCash": { "type": "number", "minimum": 0 },
+              "pollIntervalMinutes": { "type": "integer", "minimum": 1 },
+              "minNotificationIntervalMinutes": { "type": "integer", "minimum": 1 },
+              "active": { "type": "boolean" }
+            },
+            "required": ["program", "origin", "destination", "startDate", "endDate", "cabin"]
+          }
+        ]
       },
       "AwardAlertPatchInput": {
         "type": "object",
-        "description": "Non-empty JSON object required. Nullable fields clear optional values.",
+        "description": "Non-empty JSON object required. `userId`, `maxMiles`, and `maxCash` may be cleared with `null`.",
         "properties": {
           "userId": { "type": ["string", "null"] },
           "origin": { "type": "string" },
           "destination": { "type": "string" },
-          "date": { "type": ["string", "null"], "format": "date" },
-          "startDate": { "type": ["string", "null"], "format": "date" },
-          "endDate": { "type": ["string", "null"], "format": "date" },
+          "date": { "type": "string", "format": "date" },
+          "startDate": { "type": "string", "format": "date" },
+          "endDate": { "type": "string", "format": "date" },
           "cabin": { "type": "string", "enum": ["economy", "business", "first"] },
           "nonstopOnly": { "type": "boolean" },
           "maxMiles": { "type": ["integer", "null"], "minimum": 0 },

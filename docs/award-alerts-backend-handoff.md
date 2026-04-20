@@ -268,7 +268,7 @@ Recommended for deployed runtime:
 - `AWARD_ALERTS_EVALUATOR_INTERVAL_MS`
 - `AWARD_ALERTS_NOTIFIER_INTERVAL_MS`
 
-Required for the notifier worker:
+Required for the combined service runtime and the notifier worker:
 
 - `DISCORD_WEBHOOK_URL`
 

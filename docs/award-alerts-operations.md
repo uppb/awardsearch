@@ -48,7 +48,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/awardwiz
 EnvironmentFile=/etc/awardwiz/award-alerts.env
-ExecStart=/usr/bin/env bash -lc 'just run-award-alerts-service'
+ExecStart=/usr/bin/env bash -lc 'if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; else node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; fi'
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
@@ -58,7 +58,7 @@ TimeoutStopSec=120
 WantedBy=multi-user.target
 ```
 
-The direct-run service entrypoint now handles `SIGTERM` and `SIGINT` by closing the HTTP server first, rejecting new manual loop triggers, clearing armed loop timers, and then draining the evaluator/notifier loops before SQLite shutdown.
+The direct-run service entrypoint handles `SIGTERM` and `SIGINT` by closing the HTTP server first, rejecting new manual loop triggers, clearing armed loop timers, and then draining the evaluator/notifier loops before SQLite shutdown.
 
 ## Enable And Inspect
 

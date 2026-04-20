@@ -135,7 +135,6 @@ Example:
 {
   "startDate": "2026-05-01",
   "endDate": "2026-05-03",
-  "date": null,
   "maxCash": null,
   "active": false
 }
@@ -144,7 +143,8 @@ Example:
 Notes:
 
 - patch fields are partial
-- nullable patch fields clear optional values such as `date`, `userId`, `maxMiles`, and `maxCash`
+- only `userId`, `maxMiles`, and `maxCash` are clearable with `null`
+- changing date scope is done by setting the new date fields you want, not by clearing with `null`
 - empty `{}` bodies are rejected at the HTTP boundary
 
 ### Pause / Resume / Delete
