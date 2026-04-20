@@ -191,4 +191,50 @@ describe("award alert workers", () => {
     expect(repository.markNotificationSent).toHaveBeenCalledWith("event-1", "2026-04-19T00:10:00.000Z", "claim-1")
     expect(fetchFn).toHaveBeenCalledOnce()
   })
+
+  it("runNotifierWorker opens the SQLite database path and marks pending events as sent", async () => {
+    const dbPath = createDbPath()
+    const db = openAwardAlertsDb(dbPath)
+    const repository = new SqliteAwardAlertsRepository(db)
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: vi.fn().mockResolvedValue(""),
+    })
+
+    try {
+      repository.insertAlert(buildAlert())
+      repository.createNotificationEvent(buildPendingNotificationEvent())
+    } finally {
+      db.close()
+    }
+
+    await runNotifierWorker({
+      databasePath: dbPath,
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+      now: new Date("2026-04-19T00:10:00.000Z"),
+    })
+
+    const checkDb = openAwardAlertsDb(dbPath)
+    try {
+      expect(fetchFn).toHaveBeenCalledOnce()
+      expect(fetchFn).toHaveBeenCalledWith("https://discord.test/webhook", expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "content-type": "application/json",
+        }),
+      }))
+      expect(checkDb.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-1")).toEqual({
+        status: "sent",
+        sent_at: "2026-04-19T00:10:00.000Z",
+        claimed_at: null,
+        claim_token: null,
+        attempted_at: null,
+        failure_reason: null,
+      })
+    } finally {
+      checkDb.close()
+    }
+  })
 })

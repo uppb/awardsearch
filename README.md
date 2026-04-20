@@ -195,7 +195,7 @@ The newer `award-alerts` backend is separate from marked fares:
 - It uses one SQLite database file for alert definitions, state, run history, and notification events.
 - Alert management is CLI-only today:
   - `just award-alerts-cli list`
-  - `just award-alerts-cli create --program alaska --origin SFO --destination HNL --date 2026-07-01 --cabin business`
+  - `just award-alerts-cli create --program alaska --user-id user-1 --origin SFO --destination HNL --date 2026-07-01 --cabin business`
   - `just award-alerts-cli show <alert-id>`
 - The evaluator worker claims due alerts from SQLite, runs provider-specific search/match logic, and enqueues pending Discord notification events.
 - The notifier worker claims pending notification events from SQLite and posts them to one shared Discord webhook.
