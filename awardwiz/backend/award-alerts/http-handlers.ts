@@ -31,19 +31,19 @@ export type AwardAlertsHttpError = {
 
 export type AwardAlertsHttpHandlers = {
   health: (req: Request, res: Response) => void
-  listAlerts: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  getAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  createAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  updateAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  pauseAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  resumeAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  deleteAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  getStatus: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  runEvaluator: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  runNotifier: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  previewAlert: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  getAlertRuns: (req: Request, res: Response, next: NextFunction) => Promise<void>
-  getAlertNotifications: (req: Request, res: Response, next: NextFunction) => Promise<void>
+  listAlerts: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  getAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  createAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  updateAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  pauseAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  resumeAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  deleteAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  getStatus: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  runEvaluator: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  runNotifier: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  previewAlert: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  getAlertRuns: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+  getAlertNotifications: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
 }
 
 const jsonError = (status: 400 | 404, code: AwardAlertsHttpErrorBody["error"]["code"], message: string): AwardAlertsHttpError => ({
@@ -66,13 +66,20 @@ export const mapAwardAlertsError = (error: unknown): AwardAlertsHttpError => {
   return jsonError(400, "bad_request", "Request failed")
 }
 
-const asyncRoute = (handler: (req: Request, res: Response) => Promise<void>) =>
+const asyncRoute = (handler: (req: Request, res: Response) => Promise<void> | void) =>
   (req: Request, res: Response, next: NextFunction) => {
-    void handler(req, res).catch(next)
+    void Promise.resolve(handler(req, res)).catch(next)
   }
 
 const send = async (res: Response, value: unknown, status = 200) => {
   res.status(status).json(value ?? {})
+}
+
+const getAlertId = (req: Request) => {
+  const alertId = req.params["id"]
+  if (typeof alertId !== "string" || alertId.length === 0)
+    throw new Error("Invalid alert id")
+  return alertId
 }
 
 export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): AwardAlertsHttpHandlers => ({
@@ -85,9 +92,10 @@ export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): 
   }),
 
   getAlert: asyncRoute(async (req, res) => {
-    const alert = await service.getAlert(req.params.id)
+    const alertId = getAlertId(req)
+    const alert = await service.getAlert(alertId)
     if (!alert)
-      throw new Error(`award alert not found: ${req.params.id}`)
+      throw new Error(`award alert not found: ${alertId}`)
     await send(res, alert)
   }),
 
@@ -96,19 +104,20 @@ export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): 
   }),
 
   updateAlert: asyncRoute(async (req, res) => {
-    await send(res, await service.updateAlert(req.params.id, req.body as AwardAlertPatchInput))
+    const alertId = getAlertId(req)
+    await send(res, await service.updateAlert(alertId, req.body as AwardAlertPatchInput))
   }),
 
   pauseAlert: asyncRoute(async (req, res) => {
-    await send(res, await service.pauseAlert(req.params.id))
+    await send(res, await service.pauseAlert(getAlertId(req)))
   }),
 
   resumeAlert: asyncRoute(async (req, res) => {
-    await send(res, await service.resumeAlert(req.params.id))
+    await send(res, await service.resumeAlert(getAlertId(req)))
   }),
 
   deleteAlert: asyncRoute(async (req, res) => {
-    await send(res, await service.deleteAlert(req.params.id))
+    await send(res, await service.deleteAlert(getAlertId(req)))
   }),
 
   getStatus: asyncRoute(async (_req, res) => {
@@ -128,16 +137,18 @@ export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): 
   }),
 
   getAlertRuns: asyncRoute(async (req, res) => {
-    const alert = await service.getAlert(req.params.id)
+    const alertId = getAlertId(req)
+    const alert = await service.getAlert(alertId)
     if (!alert)
-      throw new Error(`award alert not found: ${req.params.id}`)
-    await send(res, await service.getAlertRuns(req.params.id))
+      throw new Error(`award alert not found: ${alertId}`)
+    await send(res, await service.getAlertRuns(alertId))
   }),
 
   getAlertNotifications: asyncRoute(async (req, res) => {
-    const alert = await service.getAlert(req.params.id)
+    const alertId = getAlertId(req)
+    const alert = await service.getAlert(alertId)
     if (!alert)
-      throw new Error(`award alert not found: ${req.params.id}`)
-    await send(res, await service.getAlertNotifications(req.params.id))
+      throw new Error(`award alert not found: ${alertId}`)
+    await send(res, await service.getAlertNotifications(alertId))
   }),
 })
