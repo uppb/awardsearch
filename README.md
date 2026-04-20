@@ -158,7 +158,7 @@ Optional for the browser app:
 
 - `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators.
 - `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
-- `DATABASE_PATH`: Required by the SQLite-backed `award-alerts` CLI and workers unless you want the default `./tmp/award-alerts.sqlite`.
+- `DATABASE_PATH`: Required for deployed `award-alerts` CLI and worker runtime, and it should point to persistent disk on the host. The `./tmp/award-alerts.sqlite` fallback is only a local-development convenience.
 - `DISCORD_WEBHOOK_URL`: Required by `awardwiz/workers/award-alerts-notifier.ts`.
 - `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/award-alerts-notifier.ts`.
 - `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/award-alerts-notifier.ts`.
@@ -200,7 +200,7 @@ The newer `award-alerts` backend is separate from marked fares:
 - The evaluator worker claims due alerts from SQLite, runs provider-specific search/match logic, and enqueues pending Discord notification events.
 - The notifier worker claims pending notification events from SQLite and posts them to one shared Discord webhook.
 - Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
-- Persistent server execution is the intended production model for this service. GitHub Actions is no longer the intended runtime for evaluator/notifier loops.
+- Persistent server execution is the intended production model for this service. Set `DATABASE_PATH` to a persistent host path for that runtime; the default `./tmp/award-alerts.sqlite` fallback is for local development only. GitHub Actions is no longer the intended runtime for evaluator/notifier loops.
 - Alaska is the first provider, but the runtime surface is generic under `award-alerts`.
 
 ## Arkalis Summary
