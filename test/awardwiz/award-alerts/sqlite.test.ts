@@ -92,7 +92,7 @@ describe("openAwardAlertsDb", () => {
       expect(getSqlByName(db, "table")).toStrictEqual({
         award_alert_runs: normalizeSql(`
           CREATE TABLE award_alert_runs (
-            id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY NOT NULL,
             alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
             started_at TEXT NOT NULL,
             completed_at TEXT,
@@ -107,7 +107,7 @@ describe("openAwardAlertsDb", () => {
         `),
         award_alert_state: normalizeSql(`
           CREATE TABLE award_alert_state (
-            alert_id TEXT PRIMARY KEY REFERENCES award_alerts(id) ON DELETE CASCADE,
+            alert_id TEXT PRIMARY KEY NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
             has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
             matched_dates TEXT,
             matching_results TEXT,
@@ -122,7 +122,7 @@ describe("openAwardAlertsDb", () => {
         `),
         award_alerts: normalizeSql(`
           CREATE TABLE award_alerts (
-            id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY NOT NULL,
             program TEXT NOT NULL,
             user_id TEXT NOT NULL,
             origin TEXT NOT NULL,
@@ -154,7 +154,7 @@ describe("openAwardAlertsDb", () => {
         `),
         notification_events: normalizeSql(`
           CREATE TABLE notification_events (
-            id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY NOT NULL,
             alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -223,6 +223,54 @@ describe("openAwardAlertsDb", () => {
         "2026-04-19T00:00:00Z",
         "2026-04-19T00:00:00Z",
       )).toThrow("CHECK constraint failed")
+    } finally {
+      db.close()
+    }
+  })
+
+  it("rejects null ids for the core tables", () => {
+    const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
+    const dbPath = join(dir, "alerts.sqlite")
+    const db = openAwardAlertsDb(dbPath)
+
+    try {
+      expect(() => db.prepare("INSERT INTO award_alerts (id, program, user_id, origin, destination, date_mode, cabin, nonstop_only, active, poll_interval_minutes, min_notification_interval_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        null,
+        "any-provider",
+        "user-1",
+        "SFO",
+        "HNL",
+        "single_date",
+        "economy",
+        1,
+        0,
+        30,
+        60,
+        "2026-04-19T00:00:00Z",
+        "2026-04-19T00:00:00Z",
+      )).toThrow("NOT NULL")
+
+      expect(() => db.prepare("INSERT INTO award_alert_state (alert_id, has_match, updated_at) VALUES (?, ?, ?)").run(
+        null,
+        0,
+        "2026-04-19T00:00:00Z",
+      )).toThrow("NOT NULL")
+
+      expect(() => db.prepare("INSERT INTO award_alert_runs (id, alert_id, started_at, has_match) VALUES (?, ?, ?, ?)").run(
+        null,
+        "alert-1",
+        "2026-04-19T00:00:00Z",
+        0,
+      )).toThrow("NOT NULL")
+
+      expect(() => db.prepare("INSERT INTO notification_events (id, alert_id, user_id, created_at, status, payload) VALUES (?, ?, ?, ?, ?, ?)").run(
+        null,
+        "alert-1",
+        "user-1",
+        "2026-04-19T00:00:00Z",
+        "pending",
+        "{}",
+      )).toThrow("NOT NULL")
     } finally {
       db.close()
     }

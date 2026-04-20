@@ -4,7 +4,7 @@ const latestSupportedVersion = 1
 
 const SCHEMA_V1_SQL = `
   CREATE TABLE award_alerts (
-    id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY NOT NULL,
     program TEXT NOT NULL,
     user_id TEXT NOT NULL,
     origin TEXT NOT NULL,
@@ -48,7 +48,7 @@ const SCHEMA_V1_SQL = `
   ON award_alerts(active, next_check_at);
 
   CREATE TABLE award_alert_state (
-    alert_id TEXT PRIMARY KEY REFERENCES award_alerts(id) ON DELETE CASCADE,
+    alert_id TEXT PRIMARY KEY NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
     has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
     matched_dates TEXT,
     matching_results TEXT,
@@ -62,7 +62,7 @@ const SCHEMA_V1_SQL = `
   );
 
   CREATE TABLE award_alert_runs (
-    id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY NOT NULL,
     alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
     started_at TEXT NOT NULL,
     completed_at TEXT,
@@ -79,7 +79,7 @@ const SCHEMA_V1_SQL = `
   ON award_alert_runs(alert_id, completed_at);
 
   CREATE TABLE notification_events (
-    id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY NOT NULL,
     alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -99,7 +99,7 @@ const SCHEMA_V1_SQL = `
 const EXPECTED_SCHEMA_OBJECTS = {
   award_alerts: `
     CREATE TABLE award_alerts (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       program TEXT NOT NULL,
       user_id TEXT NOT NULL,
       origin TEXT NOT NULL,
@@ -141,7 +141,7 @@ const EXPECTED_SCHEMA_OBJECTS = {
   `,
   award_alert_state: `
     CREATE TABLE award_alert_state (
-      alert_id TEXT PRIMARY KEY REFERENCES award_alerts(id) ON DELETE CASCADE,
+      alert_id TEXT PRIMARY KEY NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
       has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
       matched_dates TEXT,
       matching_results TEXT,
@@ -156,7 +156,7 @@ const EXPECTED_SCHEMA_OBJECTS = {
   `,
   award_alert_runs: `
     CREATE TABLE award_alert_runs (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
       started_at TEXT NOT NULL,
       completed_at TEXT,
@@ -171,7 +171,7 @@ const EXPECTED_SCHEMA_OBJECTS = {
   `,
   notification_events: `
     CREATE TABLE notification_events (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
