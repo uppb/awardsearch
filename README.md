@@ -109,6 +109,8 @@ just run-scraper aa SFO LAX 2026-07-01
 
 ### Docker Deployment
 
+Production uses the `award-alerts` container runtime. Build the image from `awardwiz/backend/award-alerts/Dockerfile`, mount persistent SQLite storage, configure `DISCORD_WEBHOOK_URL`, and expose the service on port `2233`. The intended container targets are `linux/amd64` and `linux/arm64`.
+
 Use these commands on a machine with Docker installed:
 
 ```bash

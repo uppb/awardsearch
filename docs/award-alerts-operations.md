@@ -67,7 +67,7 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
 
 ## Docker Runtime
 
-The container image is the supported production path.
+Production uses the container image. The image bundles Chromium and is the supported production path.
 
 The image contract is explicit:
 
@@ -76,63 +76,63 @@ The image contract is explicit:
 - `/data` must be backed by a persistent Docker volume or host mount
 - `DISCORD_WEBHOOK_URL` is required for notifier delivery
 - `AWARD_ALERTS_EVALUATOR_INTERVAL_MS` and `AWARD_ALERTS_NOTIFIER_INTERVAL_MS` default to `60000`
+- `linux/amd64` and `linux/arm64` are the intended supported targets
 
-Build:
+Build `linux/amd64`:
 
 ```bash
-docker build -f ./awardwiz/backend/award-alerts/Dockerfile -t awardwiz:award-alerts .
+docker buildx build \
+  --platform linux/amd64 \
+  --load \
+  -f awardwiz/backend/award-alerts/Dockerfile \
+  -t award-alerts:amd64 .
 ```
 
-Run:
+Build `linux/arm64`:
 
 ```bash
-docker run --rm -d --name award-alerts -p 2233:2233 \
+docker buildx build \
+  --platform linux/arm64 \
+  --load \
+  -f awardwiz/backend/award-alerts/Dockerfile \
+  -t award-alerts:arm64 .
+```
+
+Run `linux/amd64`:
+
+```bash
+docker run -d --rm --name award-alerts-amd64 \
+  -p 2233:2233 \
+  -e DISCORD_WEBHOOK_URL="$DISCORD_WEBHOOK_URL" \
   -e DATABASE_PATH=/data/award-alerts.sqlite \
-  -e AWARD_ALERTS_PORT=2233 \
-  -e PORT=2233 \
-  -e AWARD_ALERTS_EVALUATOR_INTERVAL_MS=60000 \
-  -e AWARD_ALERTS_NOTIFIER_INTERVAL_MS=60000 \
-  -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
-  -v award-alerts-data:/data \
-  awardwiz:award-alerts
+  -v "$(pwd)/tmp:/data" \
+  award-alerts:amd64
 ```
+
+Run `linux/arm64`:
+
+```bash
+docker run -d --rm --name award-alerts-arm64 \
+  -p 2233:2233 \
+  -e DISCORD_WEBHOOK_URL="$DISCORD_WEBHOOK_URL" \
+  -e DATABASE_PATH=/data/award-alerts.sqlite \
+  -v "$(pwd)/tmp:/data" \
+  award-alerts:arm64
+```
+
+After starting one container on a Docker-capable machine, run these smoke requests against `http://localhost:2233`.
 
 Smoke requests:
 
 ```bash
-curl -sS http://127.0.0.1:2233/health
-curl -sS http://127.0.0.1:2233/api/award-alerts/status
-curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
+curl http://localhost:2233/health
+curl http://localhost:2233/api/award-alerts/status
+curl -X POST http://localhost:2233/api/award-alerts/operations/run-scraper \
   -H 'content-type: application/json' \
-  -d '{
-    "program":"alaska",
-    "origin":"SHA",
-    "destination":"HND",
-    "startDate":"2026-05-01",
-    "endDate":"2026-05-03",
-    "cabin":"business",
-    "maxMiles":35000
-  }'
-curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-scraper \
+  -d '{"scraperName":"alaska","items":[{"origin":"SHA","destination":"HND","departureDate":"2026-05-02"}]}'
+curl -X POST http://localhost:2233/api/award-alerts/operations/preview \
   -H 'content-type: application/json' \
-  -d '{
-    "scraperName":"alaska",
-    "items":[
-      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-02" },
-      { "origin":"SHA", "destination":"HND", "departureDate":"2026-05-03" }
-    ]
-  }'
-curl -sS -X POST http://127.0.0.1:2233/api/award-alerts \
-  -H 'content-type: application/json' \
-  -d '{
-    "program":"alaska",
-    "origin":"SHA",
-    "destination":"HND",
-    "date":"2026-05-02",
-    "cabin":"business",
-    "maxMiles":35000
-  }'
-curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
+  -d '{"program":"alaska","origin":"SHA","destination":"HND","startDate":"2026-05-01","endDate":"2026-05-03","cabin":"business","maxMiles":35000}'
 ```
 
 ## SQLite Persistence And Backup

@@ -266,6 +266,13 @@ Each Discord message includes:
 
 ## Environment And Runtime Requirements
 
+Current runtime:
+
+- production is container-only
+- the container keeps Chromium bundled inside the image
+- `linux/amd64` and `linux/arm64` are the intended supported targets
+- host-installed browser/runtime paths are not part of the supported production model
+
 Recommended for deployed runtime:
 
 - `DATABASE_PATH`
@@ -282,7 +289,7 @@ Optional for Discord formatting:
 - `DISCORD_USERNAME`
 - `DISCORD_AVATAR_URL`
 
-Required for live Alaska scraping:
+Required for local development only:
 
 - Chromium or Chrome available to `chrome-launcher`
 - `CHROME_PATH` when autodiscovery is not enough
