@@ -17,7 +17,7 @@ const requireDate = (value: string | undefined, fieldName: string) => {
   return parsed
 }
 
-export const expandAlertDates = (alert: AwardAlert): string[] => {
+export const expandAlertDates = (alert: Pick<AwardAlert, "dateMode" | "date" | "startDate" | "endDate">): string[] => {
   if (alert.dateMode === "single_date")
     return [requireDate(alert.date, "date").format(DATE_FORMAT)]
 

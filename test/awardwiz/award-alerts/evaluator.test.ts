@@ -9,6 +9,15 @@ import type {
 } from "../../../awardwiz/backend/award-alerts/types.js"
 import type { FlightWithFares } from "../../../awardwiz/types/scrapers.js"
 
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 const alert: AwardAlert = {
   id: "alert-1",
   program: "alaska",
@@ -100,6 +109,95 @@ describe("evaluateOneAlert", () => {
     }))
   })
 
+  it("does not persist lastNotifiedAt when notification queue persistence fails", async () => {
+    const createNotificationEvent = vi.fn(() => {
+      throw new Error("queue unavailable")
+    })
+    const saveEvaluation = vi.fn((_evaluation: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) => undefined)
+
+    await expect(evaluateOneAlert({
+      alert,
+      repository: {
+        getState: () => undefined,
+        saveEvaluation,
+        createNotificationEvent,
+      },
+      providers: {
+        alaska: {
+          search: async () => [matchingFlight],
+          evaluateMatches: () => ({
+            hasMatch: true,
+            matchedDates: ["2026-07-01"],
+            matchingResults: [match],
+            bestMatchSummary: match,
+            matchFingerprint: "fingerprint-1",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })).rejects.toThrow("queue unavailable")
+
+    expect(createNotificationEvent).toHaveBeenCalledTimes(1)
+    expect(saveEvaluation).not.toHaveBeenCalled()
+  })
+
+  it("reuses the same notification event id when a retry follows a failed state save", async () => {
+    const createNotificationEvent = vi.fn((_event: NotificationEvent) => undefined)
+    const saveEvaluation = vi.fn()
+      .mockImplementationOnce(() => {
+        throw new Error("write failed")
+      })
+      .mockImplementationOnce(() => undefined)
+
+    const repository = {
+      getState: () => undefined,
+      saveEvaluation,
+      createNotificationEvent,
+    }
+
+    await expect(evaluateOneAlert({
+      alert,
+      repository,
+      providers: {
+        alaska: {
+          search: async () => [matchingFlight],
+          evaluateMatches: () => ({
+            hasMatch: true,
+            matchedDates: ["2026-07-01"],
+            matchingResults: [match],
+            bestMatchSummary: match,
+            matchFingerprint: "fingerprint-1",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })).rejects.toThrow("write failed")
+
+    await evaluateOneAlert({
+      alert,
+      repository,
+      providers: {
+        alaska: {
+          search: async () => [matchingFlight],
+          evaluateMatches: () => ({
+            hasMatch: true,
+            matchedDates: ["2026-07-01"],
+            matchingResults: [match],
+            bestMatchSummary: match,
+            matchFingerprint: "fingerprint-1",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })
+
+    expect(createNotificationEvent).toHaveBeenCalledTimes(2)
+    expect(createNotificationEvent.mock.calls[0]![0]!.id).toBe(createNotificationEvent.mock.calls[1]![0]!.id)
+  })
+
   it("does not create a notification when the last notification is still inside the throttle interval", async () => {
     const priorState: AwardAlertState = {
       alertId: alert.id,
@@ -153,6 +251,122 @@ describe("evaluateOneAlert", () => {
         scrapeSuccessCount: 1,
         scrapeErrorCount: 0,
         hasMatch: true,
+      }),
+    }))
+  })
+
+  it("searches date ranges sequentially instead of starting all dates at once", async () => {
+    const rangeAlert: AwardAlert = {
+      ...alert,
+      dateMode: "date_range",
+      date: undefined,
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+    }
+    const repository = {
+      getState: () => undefined,
+      saveEvaluation: vi.fn(),
+      createNotificationEvent: vi.fn(),
+    }
+    const firstStarted = createDeferred<void>()
+    const secondStarted = createDeferred<void>()
+    const first = createDeferred<FlightWithFares[]>()
+    const second = createDeferred<FlightWithFares[]>()
+    const search = vi.fn()
+      .mockImplementationOnce(() => {
+        firstStarted.resolve()
+        return first.promise
+      })
+      .mockImplementationOnce(() => {
+        secondStarted.resolve()
+        return second.promise
+      })
+
+    const evaluation = evaluateOneAlert({
+      alert: rangeAlert,
+      repository,
+      providers: {
+        alaska: {
+          search,
+          evaluateMatches: () => ({
+            hasMatch: false,
+            matchedDates: [],
+            matchingResults: [],
+            bestMatchSummary: undefined,
+            matchFingerprint: "",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })
+
+    await firstStarted.promise
+    expect(search).toHaveBeenNthCalledWith(1, { origin: "SFO", destination: "HNL", departureDate: "2026-07-01" })
+
+    first.resolve([])
+    await secondStarted.promise
+
+    expect(search).toHaveBeenCalledTimes(2)
+    expect(search).toHaveBeenNthCalledWith(2, { origin: "SFO", destination: "HNL", departureDate: "2026-07-02" })
+
+    second.resolve([])
+    await evaluation
+  })
+
+  it("retains successful matches when a mixed success/error run still produces a match", async () => {
+    const rangeAlert: AwardAlert = {
+      ...alert,
+      dateMode: "date_range",
+      date: undefined,
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+    }
+    const repository = {
+      getState: () => undefined,
+      saveEvaluation: vi.fn(),
+      createNotificationEvent: vi.fn(),
+    }
+    const search = vi.fn()
+      .mockResolvedValueOnce([matchingFlight])
+      .mockRejectedValueOnce(new Error("alaska 500"))
+
+    await evaluateOneAlert({
+      alert: rangeAlert,
+      repository,
+      providers: {
+        alaska: {
+          search,
+          evaluateMatches: () => ({
+            hasMatch: true,
+            matchedDates: ["2026-07-01"],
+            matchingResults: [match],
+            bestMatchSummary: match,
+            matchFingerprint: "fingerprint-1",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })
+
+    expect(repository.saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        hasMatch: true,
+        matchedDates: ["2026-07-01"],
+        matchingResults: [match],
+        bestMatchSummary: match,
+        lastErrorAt: "2026-04-19T00:00:00.000Z",
+        lastErrorMessage: "alaska 500",
+      }),
+      run: expect.objectContaining({
+        searchedDates: ["2026-07-01", "2026-07-02"],
+        scrapeCount: 2,
+        scrapeSuccessCount: 1,
+        scrapeErrorCount: 1,
+        matchedResultCount: 1,
+        hasMatch: true,
+        errorSummary: "alaska 500",
       }),
     }))
   })

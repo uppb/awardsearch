@@ -1,11 +1,25 @@
 import { promisify } from "util"
 import { exec as execNoPromise } from "node:child_process"
 import url from "node:url"
-import ChromeLauncher from "chrome-launcher"
+import * as chromeLauncherModule from "chrome-launcher"
 import { Arkalis, ArkalisCore } from "./arkalis.js"
 import CDP from "chrome-remote-interface"
 
 const exec = promisify(execNoPromise)
+
+type ChromeLauncherApi = {
+  launch?: typeof import("chrome-launcher")["launch"]
+  default?: {
+    launch?: typeof import("chrome-launcher")["launch"]
+  }
+}
+
+export const resolveChromeLaunch = (chromeLauncher: ChromeLauncherApi) => {
+  const launch = chromeLauncher.launch ?? chromeLauncher.default?.launch
+  if (!launch)
+    throw new Error("chrome-launcher module does not expose launch()")
+  return launch
+}
 
 export const arkalisBrowser = async (arkalis: ArkalisCore) => {
   async function genWindowCoords() {
@@ -76,7 +90,8 @@ export const arkalisBrowser = async (arkalis: ArkalisCore) => {
   }
 
   // launch chrome
-  const instance = await ChromeLauncher.launch({
+  const launchChrome = resolveChromeLaunch(chromeLauncherModule)
+  const instance = await launchChrome({
     chromeFlags: switches.map(s => s.length > 0 ? `--${s}` : ""),
     ignoreDefaultFlags: true,
     logLevel: arkalis.debugOptions.browserDebug ? "verbose" : "silent",

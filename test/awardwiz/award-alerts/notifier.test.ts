@@ -205,6 +205,30 @@ describe("sendNotificationEvent", () => {
     )
   })
 
+  it("does not send Discord if the attempting transition cannot be recorded", async () => {
+    const fetchFn = vi.fn()
+    const repository = {
+      markNotificationAttempting: vi.fn().mockRejectedValue(new Error("write failed")),
+      markNotificationSent: vi.fn().mockResolvedValue(undefined),
+      markNotificationDeliveredUnconfirmed: vi.fn().mockResolvedValue(undefined),
+      markNotificationFailed: vi.fn().mockResolvedValue(undefined),
+    }
+
+    await sendNotificationEvent({
+      event,
+      repository,
+      now: new Date("2026-04-18T06:05:00.000Z"),
+      webhookUrl: "https://discord.test/webhook",
+      fetchFn,
+    })
+
+    expect(repository.markNotificationAttempting).toHaveBeenCalledWith("event-1", "2026-04-18T06:05:00.000Z", "claim-1")
+    expect(fetchFn).not.toHaveBeenCalled()
+    expect(repository.markNotificationSent).not.toHaveBeenCalled()
+    expect(repository.markNotificationDeliveredUnconfirmed).not.toHaveBeenCalled()
+    expect(repository.markNotificationFailed).not.toHaveBeenCalled()
+  })
+
   it("short-circuits when markNotificationAttempting rejects for a stale claim", async () => {
     const fetchFn = vi.fn()
     const repository = {

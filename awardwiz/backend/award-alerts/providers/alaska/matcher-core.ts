@@ -1,21 +1,28 @@
-import { expandAlertDates } from "./date-scope.js"
-import type { AlaskaAlert, AlaskaAlertMatch, AlaskaAlertState } from "./types.js"
-import type { FlightWithFares } from "../../types/scrapers.js"
+import { expandAlertDates } from "../../date-scope.js"
+import type { AwardAlert, AwardAlertCabin, AwardAlertMatch, AwardAlertMatchEvaluation, AwardAlertState } from "../../types.js"
+import type { FlightWithFares } from "../../../../types/scrapers.js"
 
 type FlightWithOptionalSegmentCount = FlightWithFares & { segmentCount?: number }
 
-export type AlaskaAlertEvaluationResult = {
-  hasMatch: boolean
-  matchedDates: string[]
-  matchingResults: AlaskaAlertMatch[]
-  bestMatchSummary: AlaskaAlertMatch | undefined
-  matchFingerprint: string
-}
+type AlaskaMatchAlert = Pick<AwardAlert,
+  | "origin"
+  | "destination"
+  | "dateMode"
+  | "date"
+  | "startDate"
+  | "endDate"
+  | "cabin"
+  | "nonstopOnly"
+  | "maxMiles"
+  | "maxCash"
+>
+
+type AlaskaNotifyAlert = Pick<AwardAlert, "minNotificationIntervalMinutes">
 
 const normalizeRoute = (value: string) => value.trim().toUpperCase()
 const getFlightDate = (departureDateTime: string) => departureDateTime.slice(0, 10)
 
-const compareMatches = (left: AlaskaAlertMatch, right: AlaskaAlertMatch) =>
+const compareMatches = (left: AwardAlertMatch, right: AwardAlertMatch) =>
   left.miles - right.miles ||
   left.cash - right.cash ||
   left.date.localeCompare(right.date) ||
@@ -27,7 +34,7 @@ const compareMatches = (left: AlaskaAlertMatch, right: AlaskaAlertMatch) =>
   (left.bookingClass ?? "").localeCompare(right.bookingClass ?? "") ||
   left.segmentCount - right.segmentCount
 
-const serializeMatch = (match: AlaskaAlertMatch) => ({
+const serializeMatch = (match: AwardAlertMatch) => ({
   date: match.date,
   flightNo: match.flightNo,
   cabin: match.cabin,
@@ -40,9 +47,12 @@ const serializeMatch = (match: AlaskaAlertMatch) => ({
   segmentCount: match.segmentCount,
 })
 
-export const evaluateAlertMatches = (alert: AlaskaAlert, flights: FlightWithFares[]): AlaskaAlertEvaluationResult => {
+const buildBookingUrl = (origin: string, destination: string, date: string) =>
+  `https://www.alaskaair.com/search/results?A=1&O=${origin}&D=${destination}&OD=${date}&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us`
+
+export const evaluateAlertMatches = (alert: AlaskaMatchAlert, flights: FlightWithFares[]): AwardAlertMatchEvaluation => {
   const alertDates = new Set(expandAlertDates(alert))
-  const results: AlaskaAlertMatch[] = []
+  const results: AwardAlertMatch[] = []
 
   for (const flight of flights) {
     if (normalizeRoute(flight.origin) !== normalizeRoute(alert.origin)) continue
@@ -66,7 +76,7 @@ export const evaluateAlertMatches = (alert: AlaskaAlert, flights: FlightWithFare
         destination: flight.destination,
         departureDateTime: flight.departureDateTime,
         arrivalDateTime: flight.arrivalDateTime,
-        cabin: fare.cabin as AlaskaAlertMatch["cabin"],
+        cabin: fare.cabin as AwardAlertCabin,
         miles: fare.miles,
         cash: fare.cash,
         currencyOfCash: fare.currencyOfCash,
@@ -78,19 +88,22 @@ export const evaluateAlertMatches = (alert: AlaskaAlert, flights: FlightWithFare
 
   const matchingResults = results.sort(compareMatches)
   const matchedDates = [...new Set(matchingResults.map((match) => match.date))]
+  const bestMatchSummary = matchingResults[0]
+  const bookingDate = bestMatchSummary?.date ?? matchedDates[0]
 
   return {
     hasMatch: matchingResults.length > 0,
     matchedDates,
     matchingResults,
-    bestMatchSummary: matchingResults[0],
+    bestMatchSummary,
     matchFingerprint: JSON.stringify(matchingResults.map(serializeMatch)),
+    bookingUrl: buildBookingUrl(alert.origin, alert.destination, bookingDate ?? alert.date ?? alert.startDate ?? alert.endDate ?? ""),
   }
 }
 
 export const shouldNotifyAgain = (
-  alert: AlaskaAlert,
-  state: AlaskaAlertState,
+  alert: AlaskaNotifyAlert,
+  state: AwardAlertState,
   now: Date,
 ): boolean => {
   if (!state.hasMatch) return false

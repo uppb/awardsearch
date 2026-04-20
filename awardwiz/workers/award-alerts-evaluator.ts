@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 
 import { pathToFileURL } from "node:url"
-import { memoizeAlaskaSearch } from "../backend/alaska-alerts/alaska-search.js"
 import { evaluateOneAlert } from "../backend/award-alerts/evaluator.js"
 import { alaskaProvider } from "../backend/award-alerts/providers/alaska/matcher.js"
+import { memoizeAlaskaSearch } from "../backend/award-alerts/providers/alaska/search.js"
 import { claimDueAlerts } from "../backend/award-alerts/scheduler.js"
 import { SqliteAwardAlertsRepository } from "../backend/award-alerts/sqlite-repository.js"
 import { openAwardAlertsDb } from "../backend/award-alerts/sqlite.js"
