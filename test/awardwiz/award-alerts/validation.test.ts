@@ -35,7 +35,7 @@ describe("award alert validation", () => {
     const baseAlert: AwardAlert = {
       id: "alert-1",
       program: "alaska",
-      userId: undefined,
+      userId: "user-1",
       origin: "SHA",
       destination: "HND",
       dateMode: "single_date",
@@ -43,7 +43,7 @@ describe("award alert validation", () => {
       cabin: "business",
       nonstopOnly: true,
       maxMiles: 35000,
-      maxCash: undefined,
+      maxCash: 25,
       active: true,
       pollIntervalMinutes: 1,
       minNotificationIntervalMinutes: 10,
@@ -57,6 +57,8 @@ describe("award alert validation", () => {
       baseAlert,
       {
         active: false,
+        userId: null,
+        maxMiles: null,
         maxCash: 12.5,
       },
       new Date("2026-04-20T00:05:00.000Z"),
@@ -67,6 +69,8 @@ describe("award alert validation", () => {
       program: "alaska",
       active: false,
       nextCheckAt: undefined,
+      userId: undefined,
+      maxMiles: undefined,
       maxCash: 12.5,
       updatedAt: "2026-04-20T00:05:00.000Z",
     })

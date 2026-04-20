@@ -21,7 +21,11 @@ export type AwardAlertWriteInput = {
   minNotificationIntervalMinutes?: number
 }
 
-export type AwardAlertPatchInput = Partial<Omit<AwardAlertWriteInput, "program">>
+export type AwardAlertPatchInput = Partial<Omit<AwardAlertWriteInput, "program">> & {
+  userId?: string | null
+  maxMiles?: number | null
+  maxCash?: number | null
+}
 
 export type AwardAlertPreviewAlert = {
   program: AwardProgram
@@ -120,6 +124,13 @@ function resolveDateSelection(input: DateInput, fallback?: DateFallback): DateSe
       }
 }
 
+function mergeClearableField<T>(value: T | null | undefined, currentValue: T | undefined): T | undefined {
+  if (value === undefined)
+    return currentValue
+
+  return value === null ? undefined : value
+}
+
 function buildCommonAlertFields(input: AwardAlertWriteInput, fallback?: DateFallback) {
   const dateSelection = resolveDateSelection(input, fallback)
 
@@ -165,7 +176,7 @@ export function applyAlertPatch(alert: AwardAlert, patch: AwardAlertPatchInput, 
   const nowIso = now.toISOString()
   const mergedInput: AwardAlertWriteInput = {
     program: alert.program,
-    userId: patch.userId ?? alert.userId,
+    userId: mergeClearableField(patch.userId, alert.userId),
     origin: patch.origin ?? alert.origin,
     destination: patch.destination ?? alert.destination,
     date: patch.date,
@@ -173,8 +184,8 @@ export function applyAlertPatch(alert: AwardAlert, patch: AwardAlertPatchInput, 
     endDate: patch.endDate,
     cabin: patch.cabin ?? alert.cabin,
     nonstopOnly: patch.nonstopOnly ?? alert.nonstopOnly,
-    maxMiles: patch.maxMiles ?? alert.maxMiles,
-    maxCash: patch.maxCash ?? alert.maxCash,
+    maxMiles: mergeClearableField(patch.maxMiles, alert.maxMiles),
+    maxCash: mergeClearableField(patch.maxCash, alert.maxCash),
     active: patch.active ?? alert.active,
     pollIntervalMinutes: patch.pollIntervalMinutes ?? alert.pollIntervalMinutes,
     minNotificationIntervalMinutes: patch.minNotificationIntervalMinutes ?? alert.minNotificationIntervalMinutes,

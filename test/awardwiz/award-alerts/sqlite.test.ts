@@ -45,7 +45,7 @@ const getSqlByName = (db: Database.Database, type: "table" | "index") =>
       .map(({ name, sql }) => [name, normalizeSql(sql)]),
   )
 
-const seedDriftedSchema = (dbPath: string, userVersion: 0 | 1) => {
+const seedDriftedSchema = (dbPath: string, userVersion: number) => {
   const db = new Database(dbPath)
   try {
     db.exec(`
@@ -477,16 +477,16 @@ describe("openAwardAlertsDb", () => {
   it("rejects databases newer than the latest supported version", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
-    seedDriftedSchema(dbPath, 1)
+    seedDriftedSchema(dbPath, 3)
 
     const db = new Database(dbPath)
     try {
-      db.pragma("user_version = 2")
+      db.pragma("user_version = 3")
     } finally {
       db.close()
     }
 
-    expect(() => openAwardAlertsDb(dbPath)).toThrow("award alerts SQLite database version 2 is newer than the latest supported version 1")
+    expect(() => openAwardAlertsDb(dbPath)).toThrow("award alerts SQLite database version 3 is newer than the latest supported version 2")
   })
 
   it("rejects a drifted schema that is already marked version 1", () => {
