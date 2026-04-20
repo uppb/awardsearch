@@ -6,6 +6,10 @@ import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite
 import { SqliteAwardAlertsRepository } from "../../../awardwiz/backend/award-alerts/sqlite-repository.js"
 import type { AwardAlert, AwardAlertRun, AwardAlertState, NotificationEvent } from "../../../awardwiz/backend/award-alerts/types.js"
 
+// @ts-expect-error attempting is an internal in-flight marker, not a public notification status
+const invalidNotificationStatus: NotificationEvent["status"] = "attempting"
+void invalidNotificationStatus
+
 const openRepository = () => {
   const db = openAwardAlertsDb(join(mkdtempSync(join(tmpdir(), "award-alerts-repo-")), "alerts.sqlite"))
   return {
@@ -257,14 +261,14 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
-  it("finalizes stale attempting events instead of reclaiming them", async () => {
+  it("finalizes stale attempted processing events instead of reclaiming them", async () => {
     const { db, repo } = openRepository()
 
     try {
       await repo.insertAlert(buildAlert())
       repo.createNotificationEvent(buildEvent({
         id: "attempting-1",
-        status: "attempting",
+        status: "processing",
         claimedAt: "2026-04-19T00:30:00.000Z",
         claimToken: "claim-old",
         attemptedAt: "2026-04-19T00:31:00.000Z",

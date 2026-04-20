@@ -135,7 +135,7 @@ const mapNotificationEventRow = (row: NotificationEventRow): NotificationEvent =
   alertId: row.alert_id,
   userId: row.user_id,
   createdAt: row.created_at,
-  status: row.status === "processing" && row.attempted_at !== null ? "attempting" : row.status,
+  status: row.status,
   claimedAt: row.claimed_at ?? undefined,
   claimToken: row.claim_token ?? undefined,
   attemptedAt: row.attempted_at ?? undefined,
@@ -279,8 +279,6 @@ export class SqliteAwardAlertsRepository {
   }
 
   createNotificationEvent(event: NotificationEvent) {
-    const storedStatus = event.status === "attempting" ? "processing" : event.status
-
     this.db.prepare(`
       INSERT OR IGNORE INTO notification_events (
         id, alert_id, user_id, created_at, status, claimed_at, claim_token, attempted_at, payload, sent_at, failure_reason
@@ -292,7 +290,7 @@ export class SqliteAwardAlertsRepository {
       alert_id: event.alertId,
       user_id: event.userId,
       created_at: event.createdAt,
-      status: storedStatus,
+      status: event.status,
       claimed_at: event.claimedAt ?? null,
       claim_token: event.claimToken ?? null,
       attempted_at: event.attemptedAt ?? null,

@@ -48,7 +48,6 @@ export type AwardAlertRun = {
 export type NotificationEventStatus =
   | "pending"
   | "processing"
-  | "attempting"
   | "delivered_unconfirmed"
   | "sent"
   | "failed"
