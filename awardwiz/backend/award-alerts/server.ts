@@ -14,7 +14,7 @@ export function createAwardAlertsApp({ service }: AwardAlertsServerDeps): Expres
   const handlers = createAwardAlertsHttpHandlers(service)
 
   app.disable("x-powered-by")
-  app.use(express.json())
+  app.use(express.json({ strict: false }))
 
   app.get("/health", handlers.health)
 
@@ -42,6 +42,20 @@ export function createAwardAlertsApp({ service }: AwardAlertsServerDeps): Expres
   })
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (
+      error instanceof SyntaxError
+      && typeof (error as { type?: unknown }).type === "string"
+      && (error as { type?: string }).type === "entity.parse.failed"
+    ) {
+      res.status(400).json({
+        error: {
+          code: "bad_request",
+          message: "Malformed JSON body",
+        },
+      })
+      return
+    }
+
     const mapped = mapAwardAlertsError(error)
     res.status(mapped.status).json(mapped.body)
   })

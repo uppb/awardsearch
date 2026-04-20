@@ -19,7 +19,7 @@ export type AwardAlertsHttpService = {
 
 export type AwardAlertsHttpErrorBody = {
   error: {
-    code: "alert_not_found" | "bad_request"
+    code: "alert_not_found" | "bad_request" | "not_found"
     message: string
   }
 }
@@ -82,6 +82,13 @@ const getAlertId = (req: Request) => {
   return alertId
 }
 
+const getJsonObjectBody = <T>(req: Request): T => {
+  const body = req.body
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw new Error("request body must be a JSON object")
+  return body as T
+}
+
 export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): AwardAlertsHttpHandlers => ({
   health: (_req, res) => {
     res.json({ ok: true })
@@ -100,12 +107,12 @@ export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): 
   }),
 
   createAlert: asyncRoute(async (req, res) => {
-    await send(res, await service.createAlert(req.body as AwardAlertWriteInput), 201)
+    await send(res, await service.createAlert(getJsonObjectBody<AwardAlertWriteInput>(req)), 201)
   }),
 
   updateAlert: asyncRoute(async (req, res) => {
     const alertId = getAlertId(req)
-    await send(res, await service.updateAlert(alertId, req.body as AwardAlertPatchInput))
+    await send(res, await service.updateAlert(alertId, getJsonObjectBody<AwardAlertPatchInput>(req)))
   }),
 
   pauseAlert: asyncRoute(async (req, res) => {
@@ -133,7 +140,7 @@ export const createAwardAlertsHttpHandlers = (service: AwardAlertsHttpService): 
   }),
 
   previewAlert: asyncRoute(async (req, res) => {
-    await send(res, await service.previewAlert(req.body as AwardAlertWriteInput))
+    await send(res, await service.previewAlert(getJsonObjectBody<AwardAlertWriteInput>(req)))
   }),
 
   getAlertRuns: asyncRoute(async (req, res) => {
