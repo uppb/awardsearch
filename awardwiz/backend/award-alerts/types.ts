@@ -70,7 +70,7 @@ export type NotificationEventPayload = {
 export type NotificationEvent = {
   id: string
   alertId: string
-  userId: string
+  userId: string | undefined
   createdAt: string
   status: NotificationEventStatus
   claimedAt?: string
@@ -114,7 +114,7 @@ export type AwardAlertsRepository = {
 type AwardAlertBase = {
   id: string
   program: AwardProgram
-  userId: string
+  userId: string | undefined
   origin: string
   destination: string
   cabin: AwardAlertCabin

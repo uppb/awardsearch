@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { pathToFileURL } from "node:url"
 import type { AwardAlert, AwardAlertCabin } from "./types.js"
+import { buildAlertFromInput, type AwardAlertWriteInput } from "./validation.js"
 import { openAwardAlertsDb } from "./sqlite.js"
 import { SqliteAwardAlertsRepository } from "./sqlite-repository.js"
 
@@ -17,9 +18,6 @@ export type AwardAlertsCliDeps = {
 }
 
 const defaultDatabasePath = "./tmp/award-alerts.sqlite"
-const defaultPollIntervalMinutes = 1
-const defaultMinNotificationIntervalMinutes = 10
-const validDatePattern = /^\d{4}-\d{2}-\d{2}$/
 const nonNegativeIntegerPattern = /^(0|[1-9]\d*)$/
 const nonNegativeNumberPattern = /^(0|[1-9]\d*)(\.\d+)?$/
 const validCabins = new Set<AwardAlertCabin>(["economy", "business", "first"])
@@ -94,51 +92,18 @@ function requireOption(options: ParsedOptions, name: string): string {
   return value
 }
 
-function requiredPositiveInteger(options: ParsedOptions, name: string, fallback?: number): number {
+function optionalPositiveInteger(options: ParsedOptions, name: string): number | undefined {
   const value = options.get(name)
-  if (value === undefined) {
-    if (fallback !== undefined)
-      return fallback
-    throw new Error(`Missing required option: ${name}`)
-  }
-
-  if (typeof value !== "string")
-    throw new Error(`Expected integer value for ${name}`)
-
-  if (!nonNegativeIntegerPattern.test(value))
-    throw new Error(`Invalid positive integer for ${name}: ${value}`)
+  if (value === undefined)
+    return undefined
+  if (typeof value !== "string" || !nonNegativeIntegerPattern.test(value))
+    throw new Error(`Invalid positive integer for ${name}: ${String(value)}`)
 
   const parsed = Number.parseInt(value, 10)
   if (parsed <= 0)
     throw new Error(`Invalid positive integer for ${name}: ${value}`)
 
   return parsed
-}
-
-function assertDate(value: string, optionName: string) {
-  if (!validDatePattern.test(value))
-    throw new Error(`Invalid date for ${optionName}: ${value}`)
-
-  const parts = value.split("-")
-  if (parts.length !== 3)
-    throw new Error(`Invalid date for ${optionName}: ${value}`)
-
-  const yearPart = parts[0]!
-  const monthPart = parts[1]!
-  const dayPart = parts[2]!
-  const year = Number.parseInt(yearPart, 10)
-  const month = Number.parseInt(monthPart, 10)
-  const day = Number.parseInt(dayPart, 10)
-  const parsed = new Date(Date.UTC(year, month - 1, day))
-
-  if (
-    Number.isNaN(parsed.getTime())
-    || parsed.getUTCFullYear() !== year
-    || parsed.getUTCMonth() !== month - 1
-    || parsed.getUTCDate() !== day
-  ) {
-    throw new Error(`Invalid date for ${optionName}: ${value}`)
-  }
 }
 
 function optionalNonNegativeInteger(options: ParsedOptions, name: string): number | undefined {
@@ -180,7 +145,7 @@ function formatList(alerts: AwardAlert[]): string[] {
     ...alerts.map(alert => [
       alert.id,
       alert.program,
-      alert.userId,
+      alert.userId ?? "-",
       `${alert.origin}-${alert.destination}`,
       formatDates(alert),
       alert.cabin,
@@ -193,7 +158,7 @@ function formatShow(alert: AwardAlert, state?: ReturnType<CliRepository["getStat
   const lines = [
     `id: ${alert.id}`,
     `program: ${alert.program}`,
-    `user: ${alert.userId}`,
+    `user: ${alert.userId ?? "-"}`,
     `route: ${alert.origin}-${alert.destination}`,
     `dates: ${alert.dateMode} ${formatDates(alert)}`,
     `cabin: ${alert.cabin}`,
@@ -222,80 +187,34 @@ function formatShow(alert: AwardAlert, state?: ReturnType<CliRepository["getStat
 
 function createAlertFromArgs(argv: string[], deps: Required<AwardAlertsCliDeps>): AwardAlert {
   const options = parseOptions(argv, createFlags)
-  const nowIso = deps.now().toISOString()
-  const program = requireOption(options, "--program")
-  const userId = requireOption(options, "--user-id")
-  const origin = requireOption(options, "--origin")
-  const destination = requireOption(options, "--destination")
-  const cabin = parseCabin(requireOption(options, "--cabin"))
-  const pollIntervalMinutes = requiredPositiveInteger(options, "--poll-interval-minutes", defaultPollIntervalMinutes)
-  const minNotificationIntervalMinutes = requiredPositiveInteger(
-    options,
-    "--min-notification-interval-minutes",
-    defaultMinNotificationIntervalMinutes,
-  )
-  const maxMiles = optionalNonNegativeInteger(options, "--max-miles")
-  const maxCash = optionalNonNegativeNumber(options, "--max-cash")
-  const date = options.get("--date")
-  const startDate = options.get("--start-date")
-  const endDate = options.get("--end-date")
-
-  if (typeof date === "string") {
-    if (startDate !== undefined || endDate !== undefined)
-      throw new Error("Use either --date or --start-date/--end-date")
-
-    assertDate(date, "--date")
-    return {
-      id: deps.generateId(),
-      program,
-      userId,
-      origin,
-      destination,
-      dateMode: "single_date",
-      date,
-      cabin,
-      nonstopOnly: options.get("--nonstop-only") === true,
-      maxMiles,
-      maxCash,
-      active: true,
-      pollIntervalMinutes,
-      minNotificationIntervalMinutes,
-      lastCheckedAt: undefined,
-      nextCheckAt: nowIso,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-    }
-  }
-
-  if (typeof startDate !== "string" || typeof endDate !== "string")
-    throw new Error("Create requires --date or both --start-date and --end-date")
-
-  assertDate(startDate, "--start-date")
-  assertDate(endDate, "--end-date")
-  if (startDate > endDate)
-    throw new Error("--start-date must be on or before --end-date")
-
-  return {
-    id: deps.generateId(),
-    program,
-    userId,
-    origin,
-    destination,
-    dateMode: "date_range",
-    startDate,
-    endDate,
-    cabin,
+  const input: AwardAlertWriteInput = {
+    program: requireOption(options, "--program"),
+    userId: (() => {
+      const value = options.get("--user-id")
+      if (value === undefined)
+        return undefined
+      if (typeof value !== "string" || value.length === 0)
+        throw new Error("Invalid value for --user-id")
+      return value
+    })(),
+    origin: requireOption(options, "--origin"),
+    destination: requireOption(options, "--destination"),
+    date: typeof options.get("--date") === "string" ? options.get("--date") as string : undefined,
+    startDate: typeof options.get("--start-date") === "string" ? options.get("--start-date") as string : undefined,
+    endDate: typeof options.get("--end-date") === "string" ? options.get("--end-date") as string : undefined,
+    cabin: parseCabin(requireOption(options, "--cabin")),
     nonstopOnly: options.get("--nonstop-only") === true,
-    maxMiles,
-    maxCash,
-    active: true,
-    pollIntervalMinutes,
-    minNotificationIntervalMinutes,
-    lastCheckedAt: undefined,
-    nextCheckAt: nowIso,
-    createdAt: nowIso,
-    updatedAt: nowIso,
+    maxMiles: optionalNonNegativeInteger(options, "--max-miles"),
+    maxCash: optionalNonNegativeNumber(options, "--max-cash"),
+    pollIntervalMinutes: optionalPositiveInteger(options, "--poll-interval-minutes"),
+    minNotificationIntervalMinutes: optionalPositiveInteger(options, "--min-notification-interval-minutes"),
   }
+
+  return buildAlertFromInput({
+    input,
+    now: deps.now(),
+    generateId: deps.generateId,
+  })
 }
 
 export async function runCli(argv: string[], deps: AwardAlertsCliDeps = {}): Promise<number> {

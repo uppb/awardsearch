@@ -30,6 +30,8 @@ Compared with the older in-progress alert work, the major changes are:
 6. Production intent moved to one persistent server instead of GitHub-hosted worker cadence.
 7. The Alaska scraper path was updated to use the live Alaska results flow, and the backend runtime now surfaces real Arkalis/plugin failures instead of mislabeling them as “no results”.
 8. The Alaska provider cleanup retired the old `backend/alaska-alerts` runtime boundary as an active dependency.
+9. Alert input validation now lives in a shared helper module used by the CLI and future API-facing entrypoints.
+10. `userId` is optional in alert input handling, so alert creation can omit it when the caller does not have a user-scoped identity.
 
 ## Current Ownership Boundaries
 
@@ -139,13 +141,14 @@ Alerts are created through the CLI:
 ```bash
 just award-alerts-cli create \
   --program alaska \
-  --user-id user-1 \
   --origin SHA \
   --destination HND \
   --date 2026-05-02 \
   --cabin business \
   --max-miles 35000
 ```
+
+`--user-id` is still accepted, but it is optional.
 
 Supported scope:
 
@@ -246,6 +249,8 @@ Implemented now:
 
 - generic alert model with `program`
 - CLI create/list/show/pause/resume/delete
+- shared alert validation for CLI and future API-facing input flows
+- optional `userId` handling in alert input models
 - SQLite schema and migrations
 - SQLite-backed claim logic for alerts and notification events
 - single-date and date-range alert expansion
