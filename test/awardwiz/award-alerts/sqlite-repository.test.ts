@@ -399,6 +399,7 @@ describe("SqliteAwardAlertsRepository", () => {
         claimedAt: "2026-04-19T01:00:00.000Z",
         claimToken: "claim-2",
       }))
+      repo.markNotificationAttempting("event-sent", "2026-04-19T01:01:30.000Z", "claim-2")
       repo.markNotificationSent("event-sent", "2026-04-19T01:02:00.000Z")
       expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-sent")).toEqual({
         status: "sent",
@@ -415,6 +416,7 @@ describe("SqliteAwardAlertsRepository", () => {
         claimedAt: "2026-04-19T01:00:00.000Z",
         claimToken: "claim-3",
       }))
+      repo.markNotificationAttempting("event-failed", "2026-04-19T01:01:30.000Z", "claim-3")
       repo.markNotificationFailed("event-failed", "Discord webhook request failed with status 400")
       expect(db.prepare("SELECT status, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-failed")).toEqual({
         status: "failed",
@@ -422,6 +424,64 @@ describe("SqliteAwardAlertsRepository", () => {
         claim_token: null,
         attempted_at: null,
         failure_reason: "Discord webhook request failed with status 400",
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  it("does not let a stale worker overwrite a finalized stale attempt as sent", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+      repo.createNotificationEvent(buildEvent({
+        id: "event-stale-sent",
+        status: "processing",
+        claimedAt: "2026-04-19T00:30:00.000Z",
+        claimToken: "claim-stale",
+      }))
+
+      repo.markNotificationAttempting("event-stale-sent", "2026-04-19T00:31:00.000Z", "claim-stale")
+      repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
+
+      expect(() => repo.markNotificationSent("event-stale-sent", "2026-04-19T01:05:00.000Z")).toThrow("stale claim token")
+      expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-stale-sent")).toEqual({
+        status: "delivered_unconfirmed",
+        sent_at: null,
+        claimed_at: null,
+        claim_token: null,
+        attempted_at: null,
+        failure_reason: "At-most-once: stale attempting event was finalized without retry after worker interruption (claimed before 2026-04-19T00:45:00.000Z).",
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  it("does not let a stale worker overwrite a finalized stale attempt as failed", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+      repo.createNotificationEvent(buildEvent({
+        id: "event-stale-failed",
+        status: "processing",
+        claimedAt: "2026-04-19T00:30:00.000Z",
+        claimToken: "claim-stale",
+      }))
+
+      repo.markNotificationAttempting("event-stale-failed", "2026-04-19T00:31:00.000Z", "claim-stale")
+      repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
+
+      expect(() => repo.markNotificationFailed("event-stale-failed", "Discord webhook request failed with status 400")).toThrow("stale claim token")
+      expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-stale-failed")).toEqual({
+        status: "delivered_unconfirmed",
+        sent_at: null,
+        claimed_at: null,
+        claim_token: null,
+        attempted_at: null,
+        failure_reason: "At-most-once: stale attempting event was finalized without retry after worker interruption (claimed before 2026-04-19T00:45:00.000Z).",
       })
     } finally {
       db.close()

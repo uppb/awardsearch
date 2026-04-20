@@ -149,6 +149,23 @@ const assertRowUpdated = (changes: number, entity: string) => {
     throw new Error(`${entity} not found`)
 }
 
+const assertClaimStillActive = (current: {
+  status: NotificationEventStatus
+  claim_token: string | null
+  attempted_at: string | null
+} | undefined) => {
+  if (current === undefined)
+    throw new Error("notification event not found")
+
+  if (
+    current.status !== "processing"
+    || current.claim_token === null
+    || current.attempted_at === null
+  ) {
+    throw new Error("stale claim token")
+  }
+}
+
 export class SqliteAwardAlertsRepository {
   constructor(private readonly db: Database.Database) {}
 
@@ -421,33 +438,51 @@ export class SqliteAwardAlertsRepository {
   }
 
   markNotificationSent(id: string, sentAt: string) {
-    assertRowUpdated(
-      this.db.prepare(`
-        UPDATE notification_events
-        SET status = 'sent',
-            sent_at = ?,
-            claimed_at = NULL,
-            claim_token = NULL,
-            attempted_at = NULL,
-            failure_reason = NULL
-        WHERE id = ?
-      `).run(sentAt, id).changes,
-      "notification event",
-    )
+    this.db.transaction(() => {
+      const current = this.db.prepare("SELECT status, claim_token, attempted_at FROM notification_events WHERE id = ?").get(id) as {
+        status: NotificationEventStatus
+        claim_token: string | null
+        attempted_at: string | null
+      } | undefined
+      assertClaimStillActive(current)
+
+      assertRowUpdated(
+        this.db.prepare(`
+          UPDATE notification_events
+          SET status = 'sent',
+              sent_at = ?,
+              claimed_at = NULL,
+              claim_token = NULL,
+              attempted_at = NULL,
+              failure_reason = NULL
+          WHERE id = ?
+        `).run(sentAt, id).changes,
+        "notification event",
+      )
+    })()
   }
 
   markNotificationFailed(id: string, reason: string) {
-    assertRowUpdated(
-      this.db.prepare(`
-        UPDATE notification_events
-        SET status = 'failed',
-            claimed_at = NULL,
-            claim_token = NULL,
-            attempted_at = NULL,
-            failure_reason = ?
-        WHERE id = ?
-      `).run(reason, id).changes,
-      "notification event",
-    )
+    this.db.transaction(() => {
+      const current = this.db.prepare("SELECT status, claim_token, attempted_at FROM notification_events WHERE id = ?").get(id) as {
+        status: NotificationEventStatus
+        claim_token: string | null
+        attempted_at: string | null
+      } | undefined
+      assertClaimStillActive(current)
+
+      assertRowUpdated(
+        this.db.prepare(`
+          UPDATE notification_events
+          SET status = 'failed',
+              claimed_at = NULL,
+              claim_token = NULL,
+              attempted_at = NULL,
+              failure_reason = ?
+          WHERE id = ?
+        `).run(reason, id).changes,
+        "notification event",
+      )
+    })()
   }
 }
