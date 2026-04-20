@@ -22,7 +22,6 @@ type FailedSearchOutcome = { date: string, error: Error }
 type SearchOutcome = SuccessfulSearchOutcome | FailedSearchOutcome
 
 const shouldNotifyAgain = (alert: AwardAlert, state: AwardAlertState, now: Date): boolean => {
-  if (!state.hasMatch) return false
   if (!state.lastNotifiedAt) return true
 
   const lastNotifiedAt = new Date(state.lastNotifiedAt)
@@ -100,7 +99,7 @@ export const evaluateOneAlert = async ({ alert, repository, providers, now }: Ev
     .map((outcome) => outcome.error.message)
 
   const matchEvaluation = provider.evaluateMatches(alert, successfulFlights)
-  const createNotification = matchEvaluation.hasMatch && (!priorState?.hasMatch || shouldNotifyAgain(alert, priorState, now))
+  const createNotification = matchEvaluation.hasMatch && (!priorState || shouldNotifyAgain(alert, priorState, now))
   const preservePriorMatchState = scrapeErrors.length === searchedDates.length && !matchEvaluation.hasMatch && !!priorState?.hasMatch
 
   const state: AwardAlertState = {

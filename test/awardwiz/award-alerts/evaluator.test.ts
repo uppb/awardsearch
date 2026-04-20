@@ -157,6 +157,63 @@ describe("evaluateOneAlert", () => {
     }))
   })
 
+  it("keeps throttling based on lastNotifiedAt even after a prior match state cleared", async () => {
+    const priorState: AwardAlertState = {
+      alertId: alert.id,
+      hasMatch: false,
+      matchedDates: [],
+      matchingResults: [],
+      bestMatchSummary: undefined,
+      matchFingerprint: "",
+      lastMatchAt: "2026-04-18T22:00:00.000Z",
+      lastNotifiedAt: "2026-04-18T23:30:00.000Z",
+      lastErrorAt: undefined,
+      lastErrorMessage: undefined,
+      updatedAt: "2026-04-18T23:45:00.000Z",
+    }
+    const createNotificationEvent = vi.fn((_event: NotificationEvent) => undefined)
+    const saveEvaluation = vi.fn((_evaluation: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) => undefined)
+
+    await evaluateOneAlert({
+      alert,
+      repository: {
+        getState: () => priorState,
+        saveEvaluation,
+        createNotificationEvent,
+      },
+      providers: {
+        alaska: {
+          search: async () => [matchingFlight],
+          evaluateMatches: () => ({
+            hasMatch: true,
+            matchedDates: ["2026-07-01"],
+            matchingResults: [match],
+            bestMatchSummary: match,
+            matchFingerprint: "fingerprint-1",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })
+
+    expect(createNotificationEvent).not.toHaveBeenCalled()
+    expect(saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        hasMatch: true,
+        lastMatchAt: "2026-04-19T00:00:00.000Z",
+        lastNotifiedAt: "2026-04-18T23:30:00.000Z",
+        matchFingerprint: "fingerprint-1",
+      }),
+      run: expect.objectContaining({
+        scrapeCount: 1,
+        scrapeSuccessCount: 1,
+        scrapeErrorCount: 0,
+        hasMatch: true,
+      }),
+    }))
+  })
+
   it("clears the prior match state when at least one searched date succeeds without a new match", async () => {
     const priorState: AwardAlertState = {
       alertId: alert.id,
