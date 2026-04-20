@@ -179,6 +179,19 @@ function assertClaimStillActive(current: {
 export class SqliteAwardAlertsRepository {
   constructor(private readonly db: Database.Database) {}
 
+  listAlerts(): AwardAlert[] {
+    return (this.db.prepare(`
+      SELECT *
+      FROM award_alerts
+      ORDER BY created_at, id
+    `).all() as AwardAlertRow[]).map(mapAlertRow)
+  }
+
+  getAlert(id: string): AwardAlert | undefined {
+    const row = this.db.prepare("SELECT * FROM award_alerts WHERE id = ?").get(id) as AwardAlertRow | undefined
+    return row === undefined ? undefined : mapAlertRow(row)
+  }
+
   insertAlert(alert: AwardAlert) {
     this.db.prepare(`
       INSERT INTO award_alerts (
@@ -217,6 +230,31 @@ export class SqliteAwardAlertsRepository {
   getState(alertId: string): AwardAlertState | undefined {
     const row = this.db.prepare("SELECT * FROM award_alert_state WHERE alert_id = ?").get(alertId) as AwardAlertStateRow | undefined
     return row === undefined ? undefined : mapStateRow(row)
+  }
+
+  pauseAlert(id: string, updatedAt: string) {
+    const result = this.db.prepare(`
+      UPDATE award_alerts
+      SET active = 0, next_check_at = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(updatedAt, id)
+
+    assertRowUpdated(result.changes, "award alert")
+  }
+
+  resumeAlert(id: string, updatedAt: string) {
+    const result = this.db.prepare(`
+      UPDATE award_alerts
+      SET active = 1, next_check_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(updatedAt, updatedAt, id)
+
+    assertRowUpdated(result.changes, "award alert")
+  }
+
+  deleteAlert(id: string) {
+    const result = this.db.prepare("DELETE FROM award_alerts WHERE id = ?").run(id)
+    assertRowUpdated(result.changes, "award alert")
   }
 
   saveEvaluation({ alert, state, run }: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) {

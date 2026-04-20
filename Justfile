@@ -60,15 +60,24 @@ gen-frontend-dist:
 run-marked-fares-worker:
   npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/marked-fares.ts
 
-run-alaska-alerts-evaluator:
+run-award-alerts-evaluator:
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
-    CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || printf '%s' /usr/sbin/chromium)}" xvfb-run -a npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
+    DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || printf '%s' /usr/sbin/chromium)}" xvfb-run -a npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
   else \
-    npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
+    DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-evaluator.ts; \
   fi
 
+run-award-alerts-notifier:
+  DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-notifier.ts
+
+award-alerts-cli *ARGS='':
+  DATABASE_PATH="${DATABASE_PATH:-./tmp/award-alerts.sqlite}" npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/backend/award-alerts/cli.ts {{ARGS}}
+
+run-alaska-alerts-evaluator:
+  just run-award-alerts-evaluator
+
 run-alaska-alerts-notifier:
-  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/alaska-alerts-notifier.ts
+  just run-award-alerts-notifier
 
 ##############################
 # SCRAPERS
