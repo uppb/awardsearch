@@ -13,12 +13,12 @@ build:
 
 # ⭐️ builds, lints, checks dependencies and runs tests (TODO: run tests)
 check: build test
-  TIMING=1 npm exec -- eslint --ext .ts --max-warnings=0 .
+  TIMING=1 npm exec -- eslint --no-eslintrc --config .eslintrc.yml --ext .ts --max-warnings=0 .
   actionlint -color
   hadolint **/Dockerfile
   npm exec -- ajv -s config.schema.json -d config.json
   shellcheck **/*.sh .devcontainer/**/*.sh
-  NODE_NO_WARNINGS=1 npm exec -- depcheck --ignores depcheck,npm-check,typescript,devtools-protocol,@types/har-format,@iconify/json,~icons,@vitest/coverage-c8,vite-node,node-fetch,geo-tz,@types/node-fetch,@svgr/plugin-jsx,typescript-json-schema,ajv-cli
+  NODE_NO_WARNINGS=1 npm exec -- depcheck --ignores depcheck,npm-check,typescript,devtools-protocol,@types/har-format,@vitest/coverage-c8,vite-node,geo-tz,typescript-json-schema,ajv-cli
   @echo 'ok'
 
 # runs the github actions checks, note that this needs a properly configured .env
@@ -28,7 +28,7 @@ check-with-act:
 
 # ⭐️ runs the tests (with stubs/mocks)
 test:
-  npm exec -- vitest run ./test/**/*.test.ts
+  npm exec -- vitest run test
 
 # runs an interactive npm package update tool to get the latest versions of everything
 lets-upgrade-packages:

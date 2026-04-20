@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
 
     "allowJs": false,
     "skipLibCheck": true,                   // doesnt type check .d.ts files (DISABLE WHEN https://github.com/vitejs/vite/issues/11552 IS FIXED)
@@ -27,8 +28,7 @@
     "inlineSourceMap": true,
     "outDir": "dist",
 
-    "jsx": "react-jsx",
-    "types": ["unplugin-icons/types/react"]
+    "types": ["node"]
   },
   "include": ["arkalis", "awardwiz-scrapers", "awardwiz", "test"],
   "exclude": ["node_modules", "dist"]

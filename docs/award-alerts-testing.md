@@ -142,7 +142,10 @@ These checks should confirm:
 Before claiming the HTTP service work is complete, run:
 
 ```bash
+just test
 npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
+npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 ```
 

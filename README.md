@@ -74,6 +74,8 @@ Run tests:
 just test
 ```
 
+This runs the remaining repo test tree, including backend, worker, Arkalis, and scraper-debug coverage.
+
 Run the combined lint/build/test checks:
 
 ```bash

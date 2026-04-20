@@ -49,75 +49,84 @@ const runQuery = async (scraperName: string, route: string[], checkDate = dayjs(
   })
 }
 
-describe("awardwiz scrapers", () => {
-  beforeAll(() => {
-    dayjs.extend(utc)
-    dayjs.extend(timezone)
+if (scrapers.length === 0) {
+  describe("awardwiz scrapers", () => {
+    it("has no active scraper integration cases configured", () => {
+      expect(scrapers).toHaveLength(0)
+    })
   })
+}
+else {
+  describe("awardwiz scrapers", () => {
+    beforeAll(() => {
+      dayjs.extend(utc)
+      dayjs.extend(timezone)
+    })
 
-  it.concurrent.each(scrapers)("basic search: %s", async (scraperName, scraper) => {
-    const results = await runQuery(scraperName, scraper.popularRoute)
-    expect(results.result!.length).toBeGreaterThanOrEqual(1)
-    expect(results.result!.every((flight) => flight.fares.length > 0)).toBeTruthy()
-    if (!scraper.zeroMilesOk)
-      expect(results.result!.every((flight) => flight.fares.every((fare) => fare.miles > 1000))).toBeTruthy()
+    it.concurrent.each(scrapers)("basic search: %s", async (scraperName, scraper) => {
+      const results = await runQuery(scraperName, scraper.popularRoute)
+      expect(results.result!.length).toBeGreaterThanOrEqual(1)
+      expect(results.result!.every((flight) => flight.fares.length > 0)).toBeTruthy()
+      if (!scraper.zeroMilesOk)
+        expect(results.result!.every((flight) => flight.fares.every((fare) => fare.miles > 1000))).toBeTruthy()
 
-    // Ensure that there there are no unexpected missing attributes
-    const expectedFlightKeys: KeysEnum<FlightWithFares> = { flightNo: true, departureDateTime: true, arrivalDateTime: true, origin: true, destination: true, duration: true, aircraft: true, segmentCount: true, fares: true, amenities: true }
-    for (const flight of results.result!) {
-      const rawFlight: Record<string, any> = flight
-      const undefinedFlightKeys = Object.keys(expectedFlightKeys).filter((check) => rawFlight[check] === undefined && !(scraper.missingAttribs?.includes(check as keyof FlightWithFares)))
-      expect(undefinedFlightKeys, `Expected flight \n\n${JSON.stringify(flight)}\n\n to not have any undefined keys`).toStrictEqual([])
+      // Ensure that there there are no unexpected missing attributes
+      const expectedFlightKeys: KeysEnum<FlightWithFares> = { flightNo: true, departureDateTime: true, arrivalDateTime: true, origin: true, destination: true, duration: true, aircraft: true, segmentCount: true, fares: true, amenities: true }
+      for (const flight of results.result!) {
+        const rawFlight: Record<string, any> = flight
+        const undefinedFlightKeys = Object.keys(expectedFlightKeys).filter((check) => rawFlight[check] === undefined && !(scraper.missingAttribs?.includes(check as keyof FlightWithFares)))
+        expect(undefinedFlightKeys, `Expected flight \n\n${JSON.stringify(flight)}\n\n to not have any undefined keys`).toStrictEqual([])
 
-      const expectedFareKeys: KeysEnum<Omit<FlightFare, "isSaverFare">> = { cabin: true, miles: true, bookingClass: true, cash: true, currencyOfCash: true, scraper: true }
-      for (const fare of flight.fares) {
-        const rawFare: Record<string, any> = fare
-        const undefinedFareKeys = Object.keys(expectedFareKeys).filter((check) => rawFare[check] === undefined && !(scraper.missingFareAttribs?.includes(check as keyof FlightFare)))
-        expect(undefinedFareKeys, `Expected flight \n\n${JSON.stringify(flight)}\n\n and fare \n\n${JSON.stringify(fare)}\n\n to not have any undefined keys`).toStrictEqual([])
+        const expectedFareKeys: KeysEnum<Omit<FlightFare, "isSaverFare">> = { cabin: true, miles: true, bookingClass: true, cash: true, currencyOfCash: true, scraper: true }
+        for (const fare of flight.fares) {
+          const rawFare: Record<string, any> = fare
+          const undefinedFareKeys = Object.keys(expectedFareKeys).filter((check) => rawFare[check] === undefined && !(scraper.missingFareAttribs?.includes(check as keyof FlightFare)))
+          expect(undefinedFareKeys, `Expected flight \n\n${JSON.stringify(flight)}\n\n and fare \n\n${JSON.stringify(fare)}\n\n to not have any undefined keys`).toStrictEqual([])
+        }
       }
-    }
-  }, { retry: RETRIES })
+    }, { retry: RETRIES })
 
-  it.concurrent.each(scrapers)("basic same-day search: %s", async (scraperName, scraper) => {
-    await runQuery(scraperName, scraper.popularRoute, dayjs().tz(scraper.sameDayTz ?? "America/Los_Angeles").format("YYYY-MM-DD"))
-  }, { retry: RETRIES })
+    it.concurrent.each(scrapers)("basic same-day search: %s", async (scraperName, scraper) => {
+      await runQuery(scraperName, scraper.popularRoute, dayjs().tz(scraper.sameDayTz ?? "America/Los_Angeles").format("YYYY-MM-DD"))
+    }, { retry: RETRIES })
 
-  it.concurrent.each(scrapers)("fails gracefully with a past-day search: %s", async (scraperName, scraper) => {
-    const results = await runQuery(scraperName, scraper.popularRoute, dayjs().subtract(2, "days").format("YYYY-MM-DD"))
-    expect(results.result, "Expected no results when doing a past-day search").toHaveLength(0)
-  }, { retry: RETRIES })
+    it.concurrent.each(scrapers)("fails gracefully with a past-day search: %s", async (scraperName, scraper) => {
+      const results = await runQuery(scraperName, scraper.popularRoute, dayjs().subtract(2, "days").format("YYYY-MM-DD"))
+      expect(results.result, "Expected no results when doing a past-day search").toHaveLength(0)
+    }, { retry: RETRIES })
 
-  it.concurrent.each(scrapers.filter(([scraperName, scraper]) => scraper.partnerRoute))("partner availability search: %s", async (scraperName, scraper) => {
-    let checkDate = dayjs().add(3, "months").format("YYYY-MM-DD")
-    let found = false
-    do {
-      // eslint-disable-next-line no-await-in-loop
-      const results = await runQuery(scraperName, scraper.partnerRoute!, checkDate)
-      const expectFlightNo = scraper.partnerRoute![2]
+    it.concurrent.each(scrapers.filter(([scraperName, scraper]) => scraper.partnerRoute))("partner availability search: %s", async (scraperName, scraper) => {
+      let checkDate = dayjs().add(3, "months").format("YYYY-MM-DD")
+      let found = false
+      do {
+        // eslint-disable-next-line no-await-in-loop
+        const results = await runQuery(scraperName, scraper.partnerRoute!, checkDate)
+        const expectFlightNo = scraper.partnerRoute![2]
 
-      found = results.result!.some((flight) => flight.flightNo === expectFlightNo)
+        found = results.result!.some((flight) => flight.flightNo === expectFlightNo)
 
-      checkDate = dayjs(checkDate).add(1, "days").format("YYYY-MM-DD")
-    } while (dayjs(checkDate).isBefore(dayjs(checkDate).add(3, "days")) && !found)
+        checkDate = dayjs(checkDate).add(1, "days").format("YYYY-MM-DD")
+      } while (dayjs(checkDate).isBefore(dayjs(checkDate).add(3, "days")) && !found)
 
-    expect(found, `Could not find flight ${scraper.partnerRoute![2]} ${scraper.partnerRoute![0]}->${scraper.partnerRoute![1]} on ${checkDate} or the following two days`).toBeTruthy()
-  }, { retry: RETRIES })
+      expect(found, `Could not find flight ${scraper.partnerRoute![2]} ${scraper.partnerRoute![0]}->${scraper.partnerRoute![1]} on ${checkDate} or the following two days`).toBeTruthy()
+    }, { retry: RETRIES })
 
-  it.concurrent.each(scrapers)("fails gracefully with unserved airports: %s", async (scraperName, scraper) => {
-    const results = await runQuery(scraperName, ["SFO", "OGS"])
-    expect(results.result).toHaveLength(0)
-  }, { retry: RETRIES })
+    it.concurrent.each(scrapers)("fails gracefully with unserved airports: %s", async (scraperName, scraper) => {
+      const results = await runQuery(scraperName, ["SFO", "OGS"])
+      expect(results.result).toHaveLength(0)
+    }, { retry: RETRIES })
 
-  it.concurrent.each(scrapers)("can search 10 months from now: %s", async (scraperName, scraper) => {
-    const futureDate = dayjs().add(10, "months").format("YYYY-MM-DD")
-    const results = await runQuery(scraperName, scraper.popularRoute, futureDate)
-    expect(results.result!.length).toBeGreaterThanOrEqual(scraper.longtermSearchEmptyOk ? 0 : 1)
-    for (const flight of results.result!) {
-      const receivedDate = dayjs(flight.departureDateTime).format("YYYY-MM-DD")
-      expect(receivedDate, `Expected date from results (${receivedDate}) to be the same as we searched (${futureDate})`).equals(futureDate)
-    }
-  }, { retry: RETRIES })
-})
+    it.concurrent.each(scrapers)("can search 10 months from now: %s", async (scraperName, scraper) => {
+      const futureDate = dayjs().add(10, "months").format("YYYY-MM-DD")
+      const results = await runQuery(scraperName, scraper.popularRoute, futureDate)
+      expect(results.result!.length).toBeGreaterThanOrEqual(scraper.longtermSearchEmptyOk ? 0 : 1)
+      for (const flight of results.result!) {
+        const receivedDate = dayjs(flight.departureDateTime).format("YYYY-MM-DD")
+        expect(receivedDate, `Expected date from results (${receivedDate}) to be the same as we searched (${futureDate})`).equals(futureDate)
+      }
+    }, { retry: RETRIES })
+  })
+}
 
 // more:
 //   // it.todo("can distinguish a 3-class domestic vs 2-class domestic", async () => {})

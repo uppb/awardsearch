@@ -9,8 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: ci
-    env:
-      PUPPETEER_SKIP_DOWNLOAD: "true"
     steps:
       - uses: actions/checkout@v3
       - name: Run checks from container
