@@ -1,26 +1,98 @@
-import { afterEach, describe, expect, it } from "vitest"
-import { mkdtempSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite.js"
-import { SqliteAwardAlertsRepository } from "../../../awardwiz/backend/award-alerts/sqlite-repository.js"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import type { AwardAlert } from "../../../awardwiz/backend/award-alerts/types.js"
+
+vi.mock("../../../awardwiz/backend/award-alerts/sqlite.js", () => ({
+  openAwardAlertsDb: () => ({ close: () => {} }),
+}))
+
+vi.mock("../../../awardwiz/backend/award-alerts/sqlite-repository.js", () => ({
+  SqliteAwardAlertsRepository: class {
+    constructor() {}
+  },
+}))
+
 import { runCli } from "../../../awardwiz/backend/award-alerts/cli.js"
 
 const openCliHarness = () => {
-  const db = openAwardAlertsDb(join(mkdtempSync(join(tmpdir(), "award-alerts-cli-")), "alerts.sqlite"))
-  const repository = new SqliteAwardAlertsRepository(db)
+  const alerts = new Map<string, AwardAlert>()
   const stdout: string[] = []
   const stderr: string[] = []
 
   return {
-    db,
-    repository,
+    alerts,
     stdout,
     stderr,
     run: (argv: string[], now = "2026-04-19T00:00:00.000Z") => runCli(argv, {
       now: () => new Date(now),
       generateId: () => "alert-test-id",
-      openRepository: () => ({ repository, close: () => {} }),
+      openRepository: () => ({
+        repository: {
+          deleteAlert: (id: string) => {
+            alerts.delete(id)
+          },
+          getAlert: (id: string) => alerts.get(id),
+          getState: () => undefined,
+          insertAlert: (alert: AwardAlert) => {
+            alerts.set(alert.id, alert)
+          },
+          listAlerts: () => [...alerts.values()],
+          pauseAlert: (id: string, updatedAt: string) => {
+            const alert = alerts.get(id)
+            if (!alert)
+              throw new Error("award alert not found")
+            alerts.set(id, {
+              ...alert,
+              active: false,
+              nextCheckAt: undefined,
+              updatedAt,
+            })
+          },
+          resumeAlert: (id: string, updatedAt: string) => {
+            const alert = alerts.get(id)
+            if (!alert)
+              throw new Error("award alert not found")
+            alerts.set(id, {
+              ...alert,
+              active: true,
+              nextCheckAt: updatedAt,
+              updatedAt,
+            })
+          },
+        },
+        close: () => {},
+      }),
+      stdout: line => stdout.push(line),
+      stderr: line => stderr.push(line),
+    }),
+  }
+}
+
+const openCreateOnlyHarness = () => {
+  const stdout: string[] = []
+  const stderr: string[] = []
+  const insertedAlerts: AwardAlert[] = []
+
+  return {
+    insertedAlerts,
+    stdout,
+    stderr,
+    run: (argv: string[], now = "2026-04-19T00:00:00.000Z") => runCli(argv, {
+      now: () => new Date(now),
+      generateId: () => "alert-test-id",
+      openRepository: () => ({
+        repository: {
+          deleteAlert: () => {},
+          getAlert: () => undefined,
+          getState: () => undefined,
+          insertAlert: (alert: AwardAlert) => {
+            insertedAlerts.push(alert)
+          },
+          listAlerts: () => insertedAlerts,
+          pauseAlert: () => {},
+          resumeAlert: () => {},
+        },
+        close: () => {},
+      }),
       stdout: line => stdout.push(line),
       stderr: line => stderr.push(line),
     }),
@@ -28,17 +100,12 @@ const openCliHarness = () => {
 }
 
 describe("runCli", () => {
-  const cleanup = new Set<() => void>()
-
   afterEach(() => {
-    for (const close of cleanup)
-      close()
-    cleanup.clear()
+    // No external resources in this harness.
   })
 
   it("creates a single-date alert and lists it", async () => {
     const harness = openCliHarness()
-    cleanup.add(() => harness.db.close())
 
     await expect(harness.run([
       "create",
@@ -55,7 +122,7 @@ describe("runCli", () => {
 
     expect(harness.stdout.join("\n")).toContain("Created alert alert-test-id")
 
-    const createdAlert = harness.repository.getAlert("alert-test-id")
+    const createdAlert = harness.alerts.get("alert-test-id")
     expect(createdAlert).toMatchObject({
       pollIntervalMinutes: 1,
       minNotificationIntervalMinutes: 10,
@@ -71,9 +138,29 @@ describe("runCli", () => {
     expect(harness.stdout.join("\n")).toContain("active")
   })
 
+  it("creates a single-date alert without --user-id", async () => {
+    const harness = openCreateOnlyHarness()
+
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--origin", "SHA",
+      "--destination", "HND",
+      "--date", "2026-05-02",
+      "--cabin", "business",
+      "--max-miles", "35000",
+    ])).resolves.toBe(0)
+
+    expect(harness.insertedAlerts[0]).toMatchObject({
+      userId: undefined,
+      origin: "SHA",
+      destination: "HND",
+      date: "2026-05-02",
+    })
+  })
+
   it("creates a date-range alert and shows the persisted details", async () => {
     const harness = openCliHarness()
-    cleanup.add(() => harness.db.close())
 
     await harness.run([
       "create",
@@ -98,7 +185,6 @@ describe("runCli", () => {
 
   it("pauses, resumes, and deletes alerts through repository-backed commands", async () => {
     const harness = openCliHarness()
-    cleanup.add(() => harness.db.close())
 
     await harness.run([
       "create",
@@ -113,7 +199,7 @@ describe("runCli", () => {
     harness.stdout.length = 0
     await expect(harness.run(["pause", "alert-test-id"], "2026-04-19T01:00:00.000Z")).resolves.toBe(0)
     expect(harness.stdout.join("\n")).toContain("Paused alert alert-test-id")
-    expect(harness.repository.getAlert("alert-test-id")).toMatchObject({
+    expect(harness.alerts.get("alert-test-id")).toMatchObject({
       active: false,
       nextCheckAt: undefined,
     })
@@ -121,7 +207,7 @@ describe("runCli", () => {
     harness.stdout.length = 0
     await expect(harness.run(["resume", "alert-test-id"], "2026-04-19T02:00:00.000Z")).resolves.toBe(0)
     expect(harness.stdout.join("\n")).toContain("Resumed alert alert-test-id")
-    expect(harness.repository.getAlert("alert-test-id")).toMatchObject({
+    expect(harness.alerts.get("alert-test-id")).toMatchObject({
       active: true,
       nextCheckAt: "2026-04-19T02:00:00.000Z",
     })
@@ -137,7 +223,6 @@ describe("runCli", () => {
 
   it("rejects malformed numeric values and invalid dates during create", async () => {
     const harness = openCliHarness()
-    cleanup.add(() => harness.db.close())
 
     await expect(harness.run([
       "create",
@@ -200,12 +285,11 @@ describe("runCli", () => {
       "--date", "2026-02-31",
       "--cabin", "business",
     ])).resolves.toBe(1)
-    expect(harness.stderr.join("\n")).toContain("Invalid date for --date: 2026-02-31")
+    expect(harness.stderr.join("\n")).toContain("Invalid date for date: 2026-02-31")
   })
 
   it("rejects unknown flags and malformed non-create commands", async () => {
     const harness = openCliHarness()
-    cleanup.add(() => harness.db.close())
 
     await expect(harness.run([
       "create",
