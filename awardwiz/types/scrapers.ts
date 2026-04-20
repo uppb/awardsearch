@@ -1,4 +1,3 @@
-import type { QueryKey } from "@tanstack/react-query"
 import { FlightRadar24Response } from "./fr24.js"
 
 export type ScraperQuery = {
@@ -17,9 +16,6 @@ export type AWFR24Response = ScraperResponse<FlightRadar24Response>
 export type ScraperResponse<T = FlightWithFares[]> = {
   result: T | undefined
   logLines: string[]
-
-  // patched on after receiving
-  forKey?: QueryKey
 }
 
 // the "| undefined" piece makes these require to explicitly be defined

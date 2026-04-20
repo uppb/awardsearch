@@ -1,3 +1,4 @@
+import cors from "cors"
 import express, { type Express, type NextFunction, type Request, type Response } from "express"
 import {
   createAwardAlertsHttpHandlers,
@@ -14,6 +15,7 @@ export function createAwardAlertsApp({ service }: AwardAlertsServerDeps): Expres
   const handlers = createAwardAlertsHttpHandlers(service)
 
   app.disable("x-powered-by")
+  app.use(cors())
   app.use(express.json({ strict: false }))
 
   app.get("/health", handlers.health)

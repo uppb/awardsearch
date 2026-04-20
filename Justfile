@@ -13,52 +13,34 @@ build:
 
 # ⭐️ builds, lints, checks dependencies and runs tests (TODO: run tests)
 check: build test
-  TIMING=1 npm exec -- eslint --ext .ts --max-warnings=0 .
+  TIMING=1 npm exec -- eslint --no-eslintrc --config .eslintrc.yml --ext .ts --max-warnings=0 .
   actionlint -color
   hadolint **/Dockerfile
   npm exec -- ajv -s config.schema.json -d config.json
   shellcheck **/*.sh .devcontainer/**/*.sh
-  NODE_NO_WARNINGS=1 npm exec -- depcheck --ignores depcheck,npm-check,typescript,devtools-protocol,@types/har-format,@iconify/json,~icons,@vitest/coverage-c8,vite-node,node-fetch,geo-tz,@types/node-fetch,@svgr/plugin-jsx,typescript-json-schema,ajv-cli
+  NODE_NO_WARNINGS=1 npm exec -- depcheck --ignores depcheck,npm-check,typescript,devtools-protocol,@types/har-format,@vitest/coverage-c8,vite-node,geo-tz,typescript-json-schema,ajv-cli
   @echo 'ok'
 
-# runs the github actions, note that this needs a properly configured .env
+# runs the github actions checks, note that this needs a properly configured .env
 check-with-act:
   act --job run-checks --rm
-  act --job deploy --rm
-  act --job marked-fares-worked --rm
   @echo 'ok'
 
 # ⭐️ runs the tests (with stubs/mocks)
 test:
-  npm exec -- vitest run ./test/**/*.test.ts
+  npm exec -- vitest run test
 
 # runs an interactive npm package update tool to get the latest versions of everything
 lets-upgrade-packages:
   npm exec -- npm-check -u
 
 ##############################
-# FRONTEND
+# SCRAPER SUPPORT
 ##############################
-
-# ⭐️ starts the vite frontend
-run-vite args="":
-  npm exec -- vite --config awardwiz/vite.config.ts {{args}}
 
 # generate .schema.json files from .ts files
 gen-json-schemas: build
   npm exec -- typescript-json-schema tsconfig.json ScrapersConfig --topRef --noExtraProps | sed 's/import.*)\.//g' > config.schema.json
-
-# generate statics from internet (used by Github Actions when deploying)
-gen-statics:
-  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/gen-statics.ts
-
-# generate awardwiz/dist directory for frontend (used by Github Actions when deploying)
-gen-frontend-dist:
-  just run-vite build
-
-# run the marked fares worker (looks at watches fares and sends notifications when availability changes)
-run-marked-fares-worker:
-  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/marked-fares.ts
 
 run-award-alerts-evaluator:
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
@@ -93,10 +75,6 @@ run-alaska-alerts-notifier:
 ##############################
 # SCRAPERS
 ##############################
-
-# run the scrapers http server on port 2222 (make sure your .env has your config in there)
-run-server: build
-  node --enable-source-maps dist/awardwiz-scrapers/main-server.js
 
 # ⭐️ starts a scraper locally (uses xvfb-run automatically when no DISPLAY is available)
 run-scraper scraper origin destination date: build

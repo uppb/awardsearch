@@ -158,6 +158,7 @@ describe("award alerts HTTP API", () => {
     let response = await requestJson(started.baseUrl, "/health")
     expect(response.response.status).toBe(200)
     expect(response.body).toEqual({ ok: true })
+    expect(response.response.headers.get("access-control-allow-origin")).toBe("*")
 
     response = await requestJson(started.baseUrl, "/api/award-alerts", {
       method: "POST",
@@ -262,6 +263,42 @@ describe("award alerts HTTP API", () => {
     response = await requestJson(started.baseUrl, "/api/award-alerts/alert-1", { method: "DELETE" })
     expect(response.response.status).toBe(200)
     expect(response.body).toEqual(alert)
+  })
+
+  it("supports browser preflight requests for the raw scraper endpoint", async () => {
+    const service = {
+      listAlerts: vi.fn(async () => []),
+      getAlert: vi.fn(async () => undefined),
+      createAlert: vi.fn(async () => alert),
+      updateAlert: vi.fn(async () => updatedAlert),
+      pauseAlert: vi.fn(async () => ({ ...alert, active: false })),
+      resumeAlert: vi.fn(async () => ({ ...alert, active: true })),
+      deleteAlert: vi.fn(async () => alert),
+      previewAlert: vi.fn(async () => preview),
+      getAlertRuns: vi.fn(async () => []),
+      getAlertNotifications: vi.fn(async () => []),
+      getStatus: vi.fn(() => status),
+      triggerEvaluatorRun: vi.fn(async () => ({ started: true })),
+      triggerNotifierRun: vi.fn(async () => ({ started: true })),
+      runScraperBatch: vi.fn(async () => rawScraperBatchResult),
+    }
+
+    const started = startServer(service)
+    server = started.server
+
+    const response = await fetch(`${started.baseUrl()}/api/award-alerts/operations/run-scraper`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "http://127.0.0.1:5173",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    })
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get("access-control-allow-origin")).toBe("*")
+    expect(response.headers.get("access-control-allow-methods")).toContain("POST")
+    expect(response.headers.get("access-control-allow-headers")).toContain("content-type")
   })
 
   it("maps not found and bad request errors to a stable JSON shape", async () => {

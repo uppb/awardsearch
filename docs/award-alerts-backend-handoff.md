@@ -21,7 +21,7 @@ This is the current intended direction:
 - Discord webhook delivery instead of email for the new alert backend
 - Alaska as the first provider, with the provider implementation now fully owned inside the generic backend boundary
 
-This backend is separate from the older frontend-driven `marked-fares` flow. `marked-fares` still exists, still uses Firestore and email, and should be treated as legacy functionality rather than part of the new backend alert service.
+The legacy Firestore/email marked-fares worker/runtime has been removed from this branch. The retired browser search product is no longer part of this repository.
 
 ## What Changed
 
@@ -48,6 +48,7 @@ Compared with the older in-progress alert work, the major changes are:
 19. The internal admin API now has a checked-in OpenAPI contract plus a human-readable guide for local/operator use.
 20. A dedicated Dockerfile now exists for the combined service runtime instead of relying on the split worker entrypoints.
 21. The internal admin API now exposes a raw scraper batch endpoint for one-off validation calls, returning per-item Arkalis-wrapped scraper responses without mutating alert state.
+22. The old browser-facing scraper HTTP server and browser search product have been retired; operator validation now goes through `just run-award-alerts-service`, `just run-scraper`, and `POST /api/award-alerts/operations/run-scraper`.
 
 ## Current Ownership Boundaries
 
@@ -257,6 +258,7 @@ Current provider support:
 Current reality:
 
 - this is an internal validation/debugging surface, not an alert workflow
+- the browser search product that previously consumed raw scraper calls has been retired
 - the response preserves the raw Arkalis wrapper with `result` and `logLines` for successful items
 - unsupported scraper names fail the request with `bad_request`
 - per-item runtime failures remain localized to the failed item instead of aborting the whole batch
@@ -366,7 +368,7 @@ These are the main limitations a new engineer should know immediately:
 1. Only the `alaska` provider is implemented.
 2. The admin API is intentionally internal and currently has no authentication layer.
 3. Notifications go to one shared Discord webhook, not per-user destinations.
-4. The new backend and legacy `marked-fares` system coexist. There is no unified alert model yet.
+4. The legacy marked-fares worker/runtime has been retired from this branch. There is no unified alert model in active use here.
 5. The evaluator catches provider search errors per date and records them, but there is still room for richer retry and recovery policy.
 6. The notifier intentionally favors at-most-once delivery over aggressive retry to avoid duplicate Discord posts.
 7. The operator docs now cover the canonical persistent service runtime, Docker image, and internal admin API contract.
@@ -408,5 +410,4 @@ If another engineer is continuing from here, the highest-value next tasks are:
 
 1. decide whether to add auth before exposing the service outside a trusted network
 2. add the next provider only after the provider interface and operational model are proven stable
-3. decide whether the legacy `marked-fares` flow should eventually be folded into `award-alerts` or explicitly remain separate
-4. re-evaluate whether the legacy scraper HTTP server still has a necessary role now that the admin API can run one-off raw scraper validation calls
+3. keep the backend, worker, CLI, and scraper-debug docs/tests aligned if the runtime surface changes again
