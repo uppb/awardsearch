@@ -17,7 +17,7 @@ const readScraperResponseStub = <T>(path: string) => {
 const writeScraperResponseStub = (path: string, data: string) =>
   writeFileSync(`./test/awardwiz/stubs/_${path}`, data)
 
-vi.mock("../../awardwiz/helpers/runScraper.js", (importOriginal) => ({
+vi.mock("../../awardwiz/helpers/runRawScraper.js", (importOriginal) => ({
   runScraper: async (scraperName: string, datedRoute: DatedRoute) => {
     const filename = `${scraperName}-${datedRoute.origin.toLowerCase()}-${datedRoute.destination.toLowerCase()}.json`
     const scraperResponse = readScraperResponseStub<FlightWithFares[]>(filename)
@@ -25,7 +25,7 @@ vi.mock("../../awardwiz/helpers/runScraper.js", (importOriginal) => ({
       return Promise.resolve(scraperResponse)
 
     if (import.meta.env["WRITE_MISSING_STUBS"] === "true") {
-      const rs: typeof import("../../awardwiz/helpers/runScraper.js") = await importOriginal()
+      const rs: typeof import("../../awardwiz/helpers/runRawScraper.js") = await importOriginal()
       const response = await rs.runScraper(scraperName, datedRoute, undefined)
       writeScraperResponseStub(filename, JSON.stringify(response))
       return Promise.resolve(response)

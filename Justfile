@@ -94,10 +94,6 @@ run-alaska-alerts-notifier:
 # SCRAPERS
 ##############################
 
-# run the scrapers http server on port 2222 (make sure your .env has your config in there)
-run-server: build
-  node --enable-source-maps dist/awardwiz-scrapers/main-server.js
-
 # ⭐️ starts a scraper locally (uses xvfb-run automatically when no DISPLAY is available)
 run-scraper scraper origin destination date: build
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \

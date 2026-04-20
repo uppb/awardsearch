@@ -7,8 +7,11 @@ interface ImportMetaEnv {
   /** Google client id for oauth (ex. "123123123213-jgjkhewfgj23hgjkhgfk3.apps.googleusercontent.com") */
   readonly VITE_GOOGLE_CLIENT_ID: string
 
-  /** The URL for `awardwiz-scrapers`, example: `http://127.0.0.1:2222` */
+  /** Legacy compatibility base URL for raw scraper calls; prefer `VITE_AWARD_ALERTS_URL` when available. */
   readonly VITE_SCRAPERS_URL: string
+
+  /** The base URL for the `award-alerts` admin API, example: `http://127.0.0.1:2233` */
+  readonly VITE_AWARD_ALERTS_URL?: string
 
   /** The JWT token service worker token. Keep secret, do not publish to client. */
   readonly VITE_SCRAPERS_TOKEN?: string

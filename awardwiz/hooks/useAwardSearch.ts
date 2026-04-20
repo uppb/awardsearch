@@ -1,10 +1,9 @@
 import * as ReactQuery from "@tanstack/react-query"
-import { AxiosError } from "axios"
 import { FlightWithFares, ScraperResponse, SearchQuery, AWFR24Response } from "../types/scrapers.js"
 import React from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { UseQueryOptions } from "@tanstack/react-query"
-import { runScraper } from "../helpers/runScraper.js"
+import { runScraper } from "../helpers/runRawScraper.js"
 import { scrapersByAirlineRoutes, ScraperToRun, DatedRoute, AirlineRoute, expandOriginsDestinations, fr24ResponseToAirlineRoutes, flightsFromScraperResponses } from "./awardSearch.js"
 
 export type UseQueryMeta = { scraperToRun: ScraperToRun }
@@ -71,13 +70,12 @@ export const useAwardSearch = (searchQuery: SearchQuery): AwardSearchProgress =>
     staleTime: 1000 * 60 * 15,
     cacheTime: 1000 * 60 * 15,
     queryFn: async ({ signal }) => {
-      const response = await runScraper(scraperToRun.scraperName, scraperToRun.forDatedRoute, signal).catch((error: AxiosError<ScraperResponse>) => {
+      const response = await runScraper(scraperToRun.scraperName, scraperToRun.forDatedRoute, signal).catch((error: unknown) => {
+        const maybeError = error as Error & { logLines?: string[] }
+        const logLines = maybeError.logLines ?? [ "*** Network error calling scraper ***", maybeError.message || "Unknown error" ]
         // TODO: throw proper errors
-        if (error.response?.data)
-          // eslint-disable-next-line @typescript-eslint/no-throw-literal
-          throw { logLines: error.response.data.logLines, message: "Internal scraper error", name: "ScraperError" } as ScraperError
         // eslint-disable-next-line @typescript-eslint/no-throw-literal
-        throw { logLines: [ "*** Network error calling scraper ***", error.message ], message: "Network error calling scraper", name: "ScraperError" } as ScraperError
+        throw { logLines, message: maybeError.message || "Network error calling scraper", name: "ScraperError" } as ScraperError
       })
       response.forKey = queryKeyForScraperResponse(scraperToRun)
       return response

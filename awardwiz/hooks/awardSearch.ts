@@ -1,5 +1,5 @@
 import scrapersRaw from "../../config.json"
-import { runScraper } from "../helpers/runScraper.js"
+import { runScraper } from "../helpers/runRawScraper.js"
 import { AWFR24Response, FlightAmenities, FlightFare, FlightWithFares, ScraperResponse, SearchQuery } from "../types/scrapers.js"
 export const scraperConfig: ScrapersConfig = scrapersRaw
 

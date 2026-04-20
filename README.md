@@ -28,7 +28,7 @@ This README is for developers working on the codebase. It describes what is impl
 - Scraper reliability varies by airline because anti-botting behavior changes over time.
 - Marked-fare notifications exist, but the worker is still effectively beta-only: it hardcodes a `BETA_USERS` allowlist and only reacts to saver-availability changes.
 - The SQLite award-alert backend is an internal admin service, not a user-facing product surface. There is no auth on that API yet and no frontend CRUD UI.
-- Auth is required for normal frontend scraper calls unless you provide `VITE_SCRAPERS_TOKEN`.
+- Browser raw-scraper calls now target the award-alerts admin API; set `VITE_AWARD_ALERTS_URL` if the frontend is talking to a separate service host.
 - The repo has unit coverage for the search-merging pipeline, and some live scraper/debug workflows still exist, but there is no maintained always-on live scraper test suite in this branch.
 
 ## Enabled Scrapers
@@ -53,7 +53,7 @@ Defined but currently disabled in `config.json`:
 
 - `awardwiz/`: React frontend, shared search pipeline, Firebase integration, workers, and static assets.
 - `awardwiz/backend/award-alerts/`: generic SQLite-backed alert backend, CLI, scheduler, evaluator, notifier, and provider adapters.
-- `awardwiz-scrapers/`: scraper server, CLI debug entry point, scraper modules, and typed airline response shapes.
+- `awardwiz-scrapers/`: CLI debug entry point, scraper modules, and typed airline response shapes.
 - `arkalis/`: internal Chromium/CDP automation layer used by the scrapers.
 - `test/awardwiz/`: stub-driven tests for route discovery and result merging.
 - `docs/`: implementation notes for specific parts of the system.
@@ -68,7 +68,7 @@ The current search flow is:
 1. The frontend builds all origin/destination permutations from the selected airports and departure date.
 2. Each route is sent to the `fr24` scraper to discover operating airlines.
 3. The search layer maps discovered airlines to enabled scrapers from `config.json`.
-4. Matching scrapers are called through the scraper server.
+4. Matching scrapers are called through the award-alerts admin API client in the browser, while `just run-scraper` remains the local CLI debug path.
 5. Results are merged by flight number or matching schedule, then normalized:
    - best fare per scraper/cabin is kept
    - cash-only scrapers can be converted to estimated Chase points
@@ -123,12 +123,6 @@ Run one scraper locally through the CLI debug entry point:
 just run-scraper aa SFO LAX 2026-07-01
 ```
 
-Run the scraper HTTP server:
-
-```bash
-just run-server
-```
-
 Run the frontend:
 
 ```bash
@@ -137,10 +131,10 @@ just run-vite
 
 The usual local workflow is:
 
-1. Start `just run-server`
-2. Configure `.env`
+1. Start `just run-award-alerts-service`
+2. Configure `.env` for the frontend if it talks to a separate award-alerts host
 3. Start `just run-vite`
-4. Sign in through Google/Firebase unless you are using `VITE_SCRAPERS_TOKEN`
+4. Sign in through Google/Firebase if the browser app needs authenticated search UI access
 
 ## Environment Variables
 
@@ -150,11 +144,10 @@ Required for the browser app:
 
 - `VITE_GOOGLE_CLIENT_ID`: Google OAuth client ID used by the login screen.
 - `VITE_FIREBASE_CONFIG_JSON`: Firebase web config JSON used by the frontend.
-- `VITE_SCRAPERS_URL`: Browser-accessible base URL of the scraper server.
+- `VITE_AWARD_ALERTS_URL`: Browser-accessible base URL of the award-alerts admin API used by the raw scraper client.
 
 Optional for the browser app:
 
-- `VITE_SCRAPERS_TOKEN`: Bypass Firebase user auth for scraper calls by sending a fixed bearer token instead of a Firebase ID token.
 - `VITE_USE_FIREBASE_EMULATORS`: Set to `true` to use local Auth and Firestore emulators.
 - `VITE_REACT_QUERY_CACHE_OFF`: Set to `true` to disable persisted React Query cache in local storage.
 - `VITE_LOKI_LOGGING_URL`
@@ -172,14 +165,6 @@ Optional for the browser app:
 - `DISCORD_WEBHOOK_URL`: Required by the combined `award-alerts` service entrypoint and by `awardwiz/workers/award-alerts-notifier.ts`.
 - `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/award-alerts-notifier.ts`.
 - `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/award-alerts-notifier.ts`.
-
-### Scraper Server
-
-- `PORT`: HTTP port for `awardwiz-scrapers/main-server.ts`. Defaults to `2222`.
-- `GOOGLE_PROJECT_ID`: Firebase project ID used to validate Google-signed JWTs. Defaults to `awardwiz`.
-- `CONCURRENT_REQUESTS`: Bottleneck concurrency limit for incoming scraper requests. Defaults to `5`.
-- `SERVICE_WORKER_JWT_SECRET`: Enables HS256 service-worker auth as an alternative to Google-signed user tokens.
-- `TMP_PATH`: Optional base directory for shared browser cache and Arkalis result cache.
 
 ### Arkalis / Scraper Runtime
 

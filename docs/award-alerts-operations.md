@@ -3,6 +3,12 @@
 This is the canonical operator runbook for the SQLite + Discord `award-alerts` backend.
 The intended deployment model is one persistent service process, either under `systemd` or in one container.
 
+Supported operator paths today are:
+
+- `just run-award-alerts-service`
+- `just run-scraper`
+- `POST /api/award-alerts/operations/run-scraper`
+
 ## Runtime Model
 
 - one persistent service process

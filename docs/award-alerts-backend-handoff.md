@@ -48,6 +48,7 @@ Compared with the older in-progress alert work, the major changes are:
 19. The internal admin API now has a checked-in OpenAPI contract plus a human-readable guide for local/operator use.
 20. A dedicated Dockerfile now exists for the combined service runtime instead of relying on the split worker entrypoints.
 21. The internal admin API now exposes a raw scraper batch endpoint for one-off validation calls, returning per-item Arkalis-wrapped scraper responses without mutating alert state.
+22. The old browser-facing scraper HTTP server has been retired; operator validation now goes through `just run-award-alerts-service`, `just run-scraper`, and `POST /api/award-alerts/operations/run-scraper`.
 
 ## Current Ownership Boundaries
 
