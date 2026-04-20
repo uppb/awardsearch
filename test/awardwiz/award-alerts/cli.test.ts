@@ -130,4 +130,109 @@ describe("runCli", () => {
     await expect(harness.run(["list"])).resolves.toBe(0)
     expect(harness.stdout.join("\n")).toContain("No alerts found")
   })
+
+  it("rejects malformed numeric values and invalid dates during create", async () => {
+    const harness = openCliHarness()
+    cleanup.add(() => harness.db.close())
+
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--user-id", "user-1",
+      "--origin", "SFO",
+      "--destination", "HNL",
+      "--date", "2026-07-01",
+      "--cabin", "business",
+      "--poll-interval-minutes", "30.5",
+    ])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Invalid positive integer for --poll-interval-minutes: 30.5")
+
+    harness.stderr.length = 0
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--user-id", "user-1",
+      "--origin", "SFO",
+      "--destination", "HNL",
+      "--date", "2026-07-01",
+      "--cabin", "business",
+      "--min-notification-interval-minutes", "1e3",
+    ])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Invalid positive integer for --min-notification-interval-minutes: 1e3")
+
+    harness.stderr.length = 0
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--user-id", "user-1",
+      "--origin", "SFO",
+      "--destination", "HNL",
+      "--date", "2026-07-01",
+      "--cabin", "business",
+      "--max-miles", "30abc",
+    ])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Invalid non-negative integer for --max-miles: 30abc")
+
+    harness.stderr.length = 0
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--user-id", "user-1",
+      "--origin", "SFO",
+      "--destination", "HNL",
+      "--date", "2026-07-01",
+      "--cabin", "business",
+      "--max-cash", "-1",
+    ])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Invalid non-negative number for --max-cash: -1")
+
+    harness.stderr.length = 0
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--user-id", "user-1",
+      "--origin", "SFO",
+      "--destination", "HNL",
+      "--date", "2026-02-31",
+      "--cabin", "business",
+    ])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Invalid date for --date: 2026-02-31")
+  })
+
+  it("rejects unknown flags and malformed non-create commands", async () => {
+    const harness = openCliHarness()
+    cleanup.add(() => harness.db.close())
+
+    await expect(harness.run([
+      "create",
+      "--program", "alaska",
+      "--user-id", "user-1",
+      "--origin", "SFO",
+      "--destination", "HNL",
+      "--date", "2026-07-01",
+      "--cabin", "business",
+      "--bogus", "x",
+    ])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Unknown option: --bogus")
+
+    harness.stderr.length = 0
+    await expect(harness.run(["list", "extra"])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Command list does not accept positional arguments")
+
+    harness.stderr.length = 0
+    await expect(harness.run(["pause"])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Missing id for pause")
+
+    harness.stderr.length = 0
+    await expect(harness.run(["pause", "missing-id", "extra"])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Command pause accepts exactly one id")
+
+    harness.stderr.length = 0
+    await expect(harness.run(["show", "missing-id"])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("award alert not found: missing-id")
+
+    harness.stderr.length = 0
+    await expect(harness.run(["wat"])).resolves.toBe(1)
+    expect(harness.stderr.join("\n")).toContain("Unsupported command: wat")
+  })
 })

@@ -20,7 +20,24 @@ const defaultDatabasePath = "./tmp/award-alerts.sqlite"
 const defaultPollIntervalMinutes = 30
 const defaultMinNotificationIntervalMinutes = 60
 const validDatePattern = /^\d{4}-\d{2}-\d{2}$/
+const nonNegativeIntegerPattern = /^(0|[1-9]\d*)$/
+const nonNegativeNumberPattern = /^(0|[1-9]\d*)(\.\d+)?$/
 const validCabins = new Set<AwardAlertCabin>(["economy", "business", "first"])
+const createFlags = new Set([
+  "--program",
+  "--user-id",
+  "--origin",
+  "--destination",
+  "--date",
+  "--start-date",
+  "--end-date",
+  "--cabin",
+  "--nonstop-only",
+  "--max-miles",
+  "--max-cash",
+  "--poll-interval-minutes",
+  "--min-notification-interval-minutes",
+])
 
 const defaultCliDeps: Required<AwardAlertsCliDeps> = {
   openRepository: () => {
@@ -40,7 +57,7 @@ type ParsedOptions = Map<string, string | true>
 
 const isFlag = (value: string) => value.startsWith("--")
 
-function parseOptions(argv: string[]): ParsedOptions {
+function parseOptions(argv: string[], allowedFlags: Set<string>): ParsedOptions {
   const options = new Map<string, string | true>()
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -50,6 +67,9 @@ function parseOptions(argv: string[]): ParsedOptions {
 
     if (!isFlag(token))
       throw new Error(`Unexpected argument: ${token}`)
+
+    if (!allowedFlags.has(token))
+      throw new Error(`Unknown option: ${token}`)
 
     if (token === "--nonstop-only") {
       options.set(token, true)
@@ -74,20 +94,6 @@ function requireOption(options: ParsedOptions, name: string): string {
   return value
 }
 
-function optionalNumber(options: ParsedOptions, name: string): number | undefined {
-  const value = options.get(name)
-  if (value === undefined)
-    return undefined
-  if (typeof value !== "string")
-    throw new Error(`Expected numeric value for ${name}`)
-
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed))
-    throw new Error(`Invalid numeric value for ${name}: ${value}`)
-
-  return parsed
-}
-
 function requiredPositiveInteger(options: ParsedOptions, name: string, fallback?: number): number {
   const value = options.get(name)
   if (value === undefined) {
@@ -99,8 +105,11 @@ function requiredPositiveInteger(options: ParsedOptions, name: string, fallback?
   if (typeof value !== "string")
     throw new Error(`Expected integer value for ${name}`)
 
+  if (!nonNegativeIntegerPattern.test(value))
+    throw new Error(`Invalid positive integer for ${name}: ${value}`)
+
   const parsed = Number.parseInt(value, 10)
-  if (!Number.isInteger(parsed) || parsed <= 0)
+  if (parsed <= 0)
     throw new Error(`Invalid positive integer for ${name}: ${value}`)
 
   return parsed
@@ -109,6 +118,47 @@ function requiredPositiveInteger(options: ParsedOptions, name: string, fallback?
 function assertDate(value: string, optionName: string) {
   if (!validDatePattern.test(value))
     throw new Error(`Invalid date for ${optionName}: ${value}`)
+
+  const parts = value.split("-")
+  if (parts.length !== 3)
+    throw new Error(`Invalid date for ${optionName}: ${value}`)
+
+  const yearPart = parts[0]!
+  const monthPart = parts[1]!
+  const dayPart = parts[2]!
+  const year = Number.parseInt(yearPart, 10)
+  const month = Number.parseInt(monthPart, 10)
+  const day = Number.parseInt(dayPart, 10)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+
+  if (
+    Number.isNaN(parsed.getTime())
+    || parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw new Error(`Invalid date for ${optionName}: ${value}`)
+  }
+}
+
+function optionalNonNegativeInteger(options: ParsedOptions, name: string): number | undefined {
+  const value = options.get(name)
+  if (value === undefined)
+    return undefined
+  if (typeof value !== "string" || !nonNegativeIntegerPattern.test(value))
+    throw new Error(`Invalid non-negative integer for ${name}: ${String(value)}`)
+
+  return Number.parseInt(value, 10)
+}
+
+function optionalNonNegativeNumber(options: ParsedOptions, name: string): number | undefined {
+  const value = options.get(name)
+  if (value === undefined)
+    return undefined
+  if (typeof value !== "string" || !nonNegativeNumberPattern.test(value))
+    throw new Error(`Invalid non-negative number for ${name}: ${String(value)}`)
+
+  return Number(value)
 }
 
 function parseCabin(value: string): AwardAlertCabin {
@@ -171,7 +221,7 @@ function formatShow(alert: AwardAlert, state?: ReturnType<CliRepository["getStat
 }
 
 function createAlertFromArgs(argv: string[], deps: Required<AwardAlertsCliDeps>): AwardAlert {
-  const options = parseOptions(argv)
+  const options = parseOptions(argv, createFlags)
   const nowIso = deps.now().toISOString()
   const program = requireOption(options, "--program")
   const userId = requireOption(options, "--user-id")
@@ -184,8 +234,8 @@ function createAlertFromArgs(argv: string[], deps: Required<AwardAlertsCliDeps>)
     "--min-notification-interval-minutes",
     defaultMinNotificationIntervalMinutes,
   )
-  const maxMiles = optionalNumber(options, "--max-miles")
-  const maxCash = optionalNumber(options, "--max-cash")
+  const maxMiles = optionalNonNegativeInteger(options, "--max-miles")
+  const maxCash = optionalNonNegativeNumber(options, "--max-cash")
   const date = options.get("--date")
   const startDate = options.get("--start-date")
   const endDate = options.get("--end-date")
@@ -269,16 +319,19 @@ export async function runCli(argv: string[], deps: AwardAlertsCliDeps = {}): Pro
       }
 
       if (command === "list") {
+        if (rest.length > 0)
+          throw new Error("Command list does not accept positional arguments")
+
         for (const line of formatList(repository.listAlerts()))
           resolvedDeps.stdout(line)
         return 0
       }
 
-      const id = rest[0]
-      if (id === undefined)
-        throw new Error(`Missing id for ${command}`)
-
       if (command === "show") {
+        if (rest.length !== 1)
+          throw new Error(rest.length === 0 ? "Missing id for show" : "Command show accepts exactly one id")
+
+        const id = rest[0]!
         const alert = repository.getAlert(id)
         if (alert === undefined)
           throw new Error(`award alert not found: ${id}`)
@@ -289,18 +342,30 @@ export async function runCli(argv: string[], deps: AwardAlertsCliDeps = {}): Pro
       }
 
       if (command === "pause") {
+        if (rest.length !== 1)
+          throw new Error(rest.length === 0 ? "Missing id for pause" : "Command pause accepts exactly one id")
+
+        const id = rest[0]!
         repository.pauseAlert(id, resolvedDeps.now().toISOString())
         resolvedDeps.stdout(`Paused alert ${id}`)
         return 0
       }
 
       if (command === "resume") {
+        if (rest.length !== 1)
+          throw new Error(rest.length === 0 ? "Missing id for resume" : "Command resume accepts exactly one id")
+
+        const id = rest[0]!
         repository.resumeAlert(id, resolvedDeps.now().toISOString())
         resolvedDeps.stdout(`Resumed alert ${id}`)
         return 0
       }
 
       if (command === "delete") {
+        if (rest.length !== 1)
+          throw new Error(rest.length === 0 ? "Missing id for delete" : "Command delete accepts exactly one id")
+
+        const id = rest[0]!
         repository.deleteAlert(id)
         resolvedDeps.stdout(`Deleted alert ${id}`)
         return 0
