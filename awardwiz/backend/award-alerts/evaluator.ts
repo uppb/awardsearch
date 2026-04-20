@@ -101,7 +101,7 @@ export const evaluateOneAlert = async ({ alert, repository, providers, now }: Ev
 
   const matchEvaluation = provider.evaluateMatches(alert, successfulFlights)
   const createNotification = matchEvaluation.hasMatch && (!priorState?.hasMatch || shouldNotifyAgain(alert, priorState, now))
-  const preservePriorMatchState = scrapeErrors.length > 0 && !matchEvaluation.hasMatch && !!priorState?.hasMatch
+  const preservePriorMatchState = scrapeErrors.length === searchedDates.length && !matchEvaluation.hasMatch && !!priorState?.hasMatch
 
   const state: AwardAlertState = {
     alertId: alert.id,

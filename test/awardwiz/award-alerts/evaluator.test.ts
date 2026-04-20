@@ -157,7 +157,7 @@ describe("evaluateOneAlert", () => {
     }))
   })
 
-  it("preserves the prior match state when a partial scrape fails without a new match", async () => {
+  it("clears the prior match state when at least one searched date succeeds without a new match", async () => {
     const priorState: AwardAlertState = {
       alertId: alert.id,
       hasMatch: true,
@@ -214,11 +214,11 @@ describe("evaluateOneAlert", () => {
     expect(saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
       alert: dateRangeAlert,
       state: expect.objectContaining({
-        hasMatch: true,
-        matchedDates: ["2026-07-01"],
-        matchingResults: [match],
-        bestMatchSummary: match,
-        matchFingerprint: "fingerprint-0",
+        hasMatch: false,
+        matchedDates: [],
+        matchingResults: [],
+        bestMatchSummary: undefined,
+        matchFingerprint: "",
         lastMatchAt: "2026-04-18T12:00:00.000Z",
         lastNotifiedAt: "2026-04-18T09:00:00.000Z",
         lastErrorAt: "2026-04-19T00:00:00.000Z",
@@ -232,6 +232,83 @@ describe("evaluateOneAlert", () => {
         matchedResultCount: 0,
         hasMatch: false,
         errorSummary: "upstream timeout",
+      }),
+    }))
+  })
+
+  it("preserves the prior match state when all searched dates fail without a new match", async () => {
+    const priorState: AwardAlertState = {
+      alertId: alert.id,
+      hasMatch: true,
+      matchedDates: ["2026-07-01"],
+      matchingResults: [match],
+      bestMatchSummary: match,
+      matchFingerprint: "fingerprint-0",
+      lastMatchAt: "2026-04-18T12:00:00.000Z",
+      lastNotifiedAt: "2026-04-18T09:00:00.000Z",
+      lastErrorAt: undefined,
+      lastErrorMessage: undefined,
+      updatedAt: "2026-04-18T12:00:00.000Z",
+    }
+    const dateRangeAlert: AwardAlert = {
+      ...alert,
+      dateMode: "date_range",
+      date: undefined,
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+    }
+    const createNotificationEvent = vi.fn((_event: NotificationEvent) => undefined)
+    const saveEvaluation = vi.fn((_evaluation: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) => undefined)
+    const search = vi.fn(async ({ departureDate }: { departureDate: string }) => {
+      throw new Error(`${departureDate} timeout`)
+    })
+
+    await evaluateOneAlert({
+      alert: dateRangeAlert,
+      repository: {
+        getState: () => priorState,
+        saveEvaluation,
+        createNotificationEvent,
+      },
+      providers: {
+        alaska: {
+          search,
+          evaluateMatches: () => ({
+            hasMatch: false,
+            matchedDates: [],
+            matchingResults: [],
+            bestMatchSummary: undefined,
+            matchFingerprint: "",
+            bookingUrl: "https://www.alaskaair.com/search/results?A=1&O=SFO&D=HNL&OD=2026-07-01&OT=Anytime&RT=false&UPG=none&ShoppingMethod=onlineaward&locale=en-us",
+          }),
+        },
+      },
+      now: new Date("2026-04-19T00:00:00.000Z"),
+    })
+
+    expect(search).toHaveBeenCalledTimes(2)
+    expect(createNotificationEvent).not.toHaveBeenCalled()
+    expect(saveEvaluation).toHaveBeenCalledWith(expect.objectContaining({
+      alert: dateRangeAlert,
+      state: expect.objectContaining({
+        hasMatch: true,
+        matchedDates: ["2026-07-01"],
+        matchingResults: [match],
+        bestMatchSummary: match,
+        matchFingerprint: "fingerprint-0",
+        lastMatchAt: "2026-04-18T12:00:00.000Z",
+        lastNotifiedAt: "2026-04-18T09:00:00.000Z",
+        lastErrorAt: "2026-04-19T00:00:00.000Z",
+        lastErrorMessage: "2026-07-01 timeout",
+      }),
+      run: expect.objectContaining({
+        searchedDates: ["2026-07-01", "2026-07-02"],
+        scrapeCount: 2,
+        scrapeSuccessCount: 0,
+        scrapeErrorCount: 2,
+        matchedResultCount: 0,
+        hasMatch: false,
+        errorSummary: "2026-07-01 timeout",
       }),
     }))
   })

@@ -1,3 +1,3 @@
-import { memoizeAlaskaSearch, searchAlaska } from "../../../alaska-alerts/alaska-search.js"
+import { searchAlaska } from "../../../alaska-alerts/alaska-search.js"
 
-export const searchAlaskaProvider = memoizeAlaskaSearch(searchAlaska)
+export const searchAlaskaProvider = searchAlaska
