@@ -7,9 +7,19 @@ import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite
 import type { AwardAlert, NotificationEvent } from "../../../awardwiz/backend/award-alerts/types.js"
 import { runEvaluatorWorker } from "../../../awardwiz/workers/award-alerts-evaluator.js"
 import { runNotifierWorker } from "../../../awardwiz/workers/award-alerts-notifier.js"
+import { startAwardAlertsService } from "../../../awardwiz/workers/award-alerts-service.js"
 import type { FlightWithFares } from "../../../awardwiz/types/scrapers.js"
 
 const createDbPath = () => join(mkdtempSync(join(tmpdir(), "award-alert-workers-")), "alerts.sqlite")
+
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
 
 const buildAlert = (overrides: Partial<AwardAlert> = {}): AwardAlert => ({
   ...({
@@ -360,6 +370,94 @@ describe("award alert workers", () => {
     } finally {
       db.close()
       vi.unmock("../../../awardwiz/backend/award-alerts/providers/index.js")
+    }
+  })
+
+  it("starts the unified award alerts service and rejects overlapping manual evaluator triggers", async () => {
+    const dbPath = createDbPath()
+    const db = openAwardAlertsDb(dbPath)
+    const repository = new SqliteAwardAlertsRepository(db)
+    const deferred = createDeferred<void>()
+    const search = vi.fn().mockImplementation(() => deferred.promise.then(() => []))
+    const evaluateMatches = vi.fn(() => ({
+      hasMatch: false,
+      matchedDates: [],
+      matchingResults: [],
+      bestMatchSummary: undefined,
+      matchFingerprint: "service-fingerprint",
+      bookingUrl: "https://example.test/booking",
+    }))
+
+    try {
+      repository.insertAlert(buildAlert({
+        nextCheckAt: "2026-04-19T23:59:00.000Z",
+      }))
+    } finally {
+      db.close()
+    }
+
+    const service = await startAwardAlertsService({
+      databasePath: dbPath,
+      port: 0,
+      evaluatorIntervalMs: 60 * 60 * 1000,
+      notifierIntervalMs: 60 * 60 * 1000,
+      webhookUrl: "https://discord.test/webhook",
+      providers: {
+        alaska: {
+          search,
+          evaluateMatches,
+        },
+      },
+    })
+
+    let closed = false
+    const closeService = async () => {
+      if (closed)
+        return
+      closed = true
+      await service.close()
+    }
+
+    try {
+      const statusResponse = await fetch(`${service.baseUrl}/api/award-alerts/status`)
+      expect(statusResponse.status).toBe(200)
+      expect(await statusResponse.json()).toMatchObject({
+        databasePath: dbPath,
+        evaluator: expect.objectContaining({
+          running: false,
+          intervalMs: 60 * 60 * 1000,
+        }),
+        notifier: expect.objectContaining({
+          running: false,
+          intervalMs: 60 * 60 * 1000,
+        }),
+      })
+
+      const firstRunResponse = await fetch(`${service.baseUrl}/api/award-alerts/operations/run-evaluator`, {
+        method: "POST",
+      })
+      expect(firstRunResponse.status).toBe(200)
+      expect(await firstRunResponse.json()).toEqual({ started: true })
+
+      const runningStatusResponse = await fetch(`${service.baseUrl}/api/award-alerts/status`)
+      expect(await runningStatusResponse.json()).toMatchObject({
+        evaluator: expect.objectContaining({
+          running: true,
+          lastStartedAt: expect.any(String),
+        }),
+      })
+
+      const secondRunResponse = await fetch(`${service.baseUrl}/api/award-alerts/operations/run-evaluator`, {
+        method: "POST",
+      })
+      expect(secondRunResponse.status).toBe(200)
+      expect(await secondRunResponse.json()).toEqual({ started: false, reason: "already_running" })
+
+      deferred.resolve()
+      await closeService()
+    } finally {
+      deferred.resolve()
+      await closeService().catch(() => undefined)
     }
   })
 })

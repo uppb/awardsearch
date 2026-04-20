@@ -13,6 +13,7 @@ This is the current intended direction:
 - SQLite as the durable store and single-server coordination mechanism
 - CLI management plus an unauthenticated internal Express admin API
 - one persistent server as the intended runtime
+- a single-process service entrypoint that owns the HTTP server plus evaluator/notifier loops
 - Discord webhook delivery instead of email for the new alert backend
 - Alaska as the first provider, with the provider implementation now fully owned inside the generic backend boundary
 
@@ -37,6 +38,7 @@ Compared with the older in-progress alert work, the major changes are:
 13. A service/application layer now sits above the repository and owns CRUD, provider-aware preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet; date-range previews fan out provider searches in parallel rather than serially awaiting each date.
 14. The evaluator worker now shares a default provider builder with the future service path instead of maintaining its own local Alaska provider wiring.
 15. An internal Express API now exposes health, CRUD/admin, status, run, and notification endpoints for the award-alerts service without adding auth middleware or public-facing deployment concerns.
+16. A unified service entrypoint now opens SQLite, constructs the repository, starts the evaluator/notifier loops in-process, and serves the internal Express API from one runtime.
 
 ## Current Ownership Boundaries
 
@@ -52,6 +54,7 @@ These files are the primary backend surface:
 - `awardwiz/backend/award-alerts/evaluator.ts`
 - `awardwiz/backend/award-alerts/notifier.ts`
 - `awardwiz/backend/award-alerts/service.ts`
+- `awardwiz/workers/award-alerts-service.ts`
 - `awardwiz/backend/award-alerts/providers/index.ts`
 - `awardwiz/backend/award-alerts/cli.ts`
 - `awardwiz/workers/award-alerts-evaluator.ts`
@@ -237,6 +240,9 @@ Each Discord message includes:
 Recommended for deployed runtime:
 
 - `DATABASE_PATH`
+- `PORT` or `AWARD_ALERTS_PORT`
+- `AWARD_ALERTS_EVALUATOR_INTERVAL_MS`
+- `AWARD_ALERTS_NOTIFIER_INTERVAL_MS`
 
 Required for the notifier worker:
 
@@ -255,7 +261,7 @@ Required for live Alaska scraping:
 
 Important operational assumption:
 
-- this service is intended to run on one persistent server with persistent disk
+- this service runs as one persistent server with persistent disk and in-process loops
 
 It is not designed as a distributed multi-runner system. SQLite is the coordination layer, so multiple independent machines would be the wrong deployment shape.
 
@@ -314,7 +320,7 @@ These are the main limitations a new engineer should know immediately:
 4. The new backend and legacy `marked-fares` system coexist. There is no unified alert model yet.
 5. The evaluator catches provider search errors per date and records them, but there is still room for richer retry and recovery policy.
 6. The notifier intentionally favors at-most-once delivery over aggressive retry to avoid duplicate Discord posts.
-7. The operator docs now cover the canonical persistent-server `systemd` deployment model.
+7. The operator docs now cover the canonical persistent-server `systemd` deployment model and the unified service entrypoint.
 
 ## Current Migration Boundary
 
@@ -329,7 +335,7 @@ What is legacy:
 What is current:
 
 - Alaska search and matching live under `awardwiz/backend/award-alerts/providers/alaska/`
-- the persistent server model is the intended production runtime
+- the persistent server model is the implemented production runtime
 - operator guidance now lives in `docs/award-alerts-operations.md`
 
 ## Important Recent Fix
