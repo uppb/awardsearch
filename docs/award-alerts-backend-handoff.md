@@ -30,7 +30,7 @@ Compared with the older in-progress alert work, the major changes are:
 6. Production intent moved to one persistent server instead of GitHub-hosted worker cadence.
 7. The Alaska scraper path was updated to use the live Alaska results flow, and the backend runtime now surfaces real Arkalis/plugin failures instead of mislabeling them as “no results”.
 8. The Alaska provider cleanup retired the old `backend/alaska-alerts` runtime boundary as an active dependency.
-9. Alert input validation now lives in a shared helper module used by the CLI and future API-facing entrypoints.
+9. Alert input validation now lives in a shared helper module used by the CLI and future API-facing entrypoints, including date/default handling and core domain validation for cabins, intervals, and rule limits.
 10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 11. Legacy v1 SQLite databases still open and migrate to v2 on startup before the nullable schema takes effect.
 

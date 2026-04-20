@@ -98,4 +98,70 @@ describe("award alert validation", () => {
     expect("createdAt" in previewAlert).toBe(false)
     expect("updatedAt" in previewAlert).toBe(false)
   })
+
+  it("rejects invalid runtime values in the shared validation helper", () => {
+    expect(() => buildAlertFromInput({
+      input: {
+        program: "alaska",
+        userId: "   ",
+        origin: "SHA",
+        destination: "HND",
+        date: "2026-05-02",
+        cabin: "business",
+      },
+      now: new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-test-id",
+    })).toThrow("Invalid value for userId")
+
+    expect(() => buildAlertFromInput({
+      input: {
+        program: "alaska",
+        origin: "SHA",
+        destination: "HND",
+        date: "2026-05-02",
+        cabin: "premium-economy" as AwardAlert["cabin"],
+      },
+      now: new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-test-id",
+    })).toThrow("Invalid cabin: premium-economy")
+
+    expect(() => buildAlertFromInput({
+      input: {
+        program: "alaska",
+        origin: "SHA",
+        destination: "HND",
+        date: "2026-05-02",
+        cabin: "business",
+        pollIntervalMinutes: 0,
+      },
+      now: new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-test-id",
+    })).toThrow("Invalid positive integer for pollIntervalMinutes: 0")
+
+    expect(() => buildAlertFromInput({
+      input: {
+        program: "alaska",
+        origin: "SHA",
+        destination: "HND",
+        date: "2026-05-02",
+        cabin: "business",
+        maxMiles: -1,
+      },
+      now: new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-test-id",
+    })).toThrow("Invalid non-negative integer for maxMiles: -1")
+
+    expect(() => buildAlertFromInput({
+      input: {
+        program: "alaska",
+        origin: "SHA",
+        destination: "HND",
+        date: "2026-05-02",
+        cabin: "business",
+        maxCash: Number.NaN,
+      },
+      now: new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-test-id",
+    })).toThrow("Invalid non-negative number for maxCash: NaN")
+  })
 })

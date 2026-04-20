@@ -3,6 +3,7 @@ import type { AwardAlert, AwardAlertCabin, AwardProgram } from "./types.js"
 const defaultPollIntervalMinutes = 1
 const defaultMinNotificationIntervalMinutes = 10
 const validDatePattern = /^\d{4}-\d{2}-\d{2}$/
+const validCabins = new Set<AwardAlertCabin>(["economy", "business", "first"])
 
 export type AwardAlertWriteInput = {
   program: AwardProgram
@@ -56,6 +57,62 @@ type DateInput = {
 }
 
 type DateFallback = Pick<AwardAlert, "dateMode" | "date" | "startDate" | "endDate">
+
+function assertNonEmptyString(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== "string" || value.trim().length === 0)
+    throw new Error(`Invalid value for ${fieldName}`)
+}
+
+function assertOptionalBoolean(value: unknown, fieldName: string) {
+  if (value !== undefined && typeof value !== "boolean")
+    throw new Error(`Invalid boolean for ${fieldName}`)
+}
+
+function assertOptionalPositiveInteger(value: unknown, fieldName: string) {
+  if (value === undefined)
+    return
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0)
+    throw new Error(`Invalid positive integer for ${fieldName}: ${String(value)}`)
+}
+
+function assertOptionalNonNegativeInteger(value: unknown, fieldName: string) {
+  if (value === undefined)
+    return
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0)
+    throw new Error(`Invalid non-negative integer for ${fieldName}: ${String(value)}`)
+}
+
+function assertOptionalNonNegativeNumber(value: unknown, fieldName: string) {
+  if (value === undefined)
+    return
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+    throw new Error(`Invalid non-negative number for ${fieldName}: ${String(value)}`)
+}
+
+function assertCabin(value: unknown): asserts value is AwardAlertCabin {
+  if (!validCabins.has(value as AwardAlertCabin))
+    throw new Error(`Invalid cabin: ${String(value)}`)
+}
+
+function validateAlertInput(input: AwardAlertWriteInput) {
+  assertNonEmptyString(input.program, "program")
+  assertNonEmptyString(input.origin, "origin")
+  assertNonEmptyString(input.destination, "destination")
+
+  if (input.userId !== undefined)
+    assertNonEmptyString(input.userId, "userId")
+
+  assertCabin(input.cabin)
+  assertOptionalBoolean(input.nonstopOnly, "nonstopOnly")
+  assertOptionalBoolean(input.active, "active")
+  assertOptionalPositiveInteger(input.pollIntervalMinutes, "pollIntervalMinutes")
+  assertOptionalPositiveInteger(input.minNotificationIntervalMinutes, "minNotificationIntervalMinutes")
+  assertOptionalNonNegativeInteger(input.maxMiles, "maxMiles")
+  assertOptionalNonNegativeNumber(input.maxCash, "maxCash")
+}
 
 function assertDate(value: string, fieldName: string) {
   if (!validDatePattern.test(value))
@@ -132,6 +189,7 @@ function mergeClearableField<T>(value: T | null | undefined, currentValue: T | u
 }
 
 function buildCommonAlertFields(input: AwardAlertWriteInput, fallback?: DateFallback) {
+  validateAlertInput(input)
   const dateSelection = resolveDateSelection(input, fallback)
 
   return {
