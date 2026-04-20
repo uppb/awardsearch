@@ -11,7 +11,7 @@ This is the current intended direction:
 
 - generic alert runtime under `award-alerts`, not Alaska-specific naming
 - SQLite as the durable store and single-server coordination mechanism
-- CLI-only alert management
+- CLI management plus an unauthenticated internal Express admin API
 - one persistent server as the intended runtime
 - Discord webhook delivery instead of email for the new alert backend
 - Alaska as the first provider, with the provider implementation now fully owned inside the generic backend boundary
@@ -34,8 +34,9 @@ Compared with the older in-progress alert work, the major changes are:
 10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 11. Legacy v1 SQLite databases still open and migrate to v2 on startup before the nullable schema takes effect.
 12. The repository surface now supports in-place alert updates plus alert-scoped run and notification history inspection.
-13. A service/application layer now sits above the repository and owns CRUD, provider-aware preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet.
+13. A service/application layer now sits above the repository and owns CRUD, provider-aware preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet; date-range previews fan out provider searches in parallel rather than serially awaiting each date.
 14. The evaluator worker now shares a default provider builder with the future service path instead of maintaining its own local Alaska provider wiring.
+15. An internal Express API now exposes health, CRUD/admin, status, run, and notification endpoints for the award-alerts service without adding auth middleware or public-facing deployment concerns.
 
 ## Current Ownership Boundaries
 
@@ -64,9 +65,33 @@ What they own:
 - evaluation state and run history persistence
 - repository-backed alert updates and history reads
 - application/service orchestration for CRUD, preview, and status passthrough
+- internal HTTP routing for health, CRUD/admin, status, and operational endpoints
 - notification event queueing
 - Discord delivery
 - CLI administration
+
+### Internal Express API
+
+The current HTTP surface lives under `awardwiz/backend/award-alerts/server.ts` and `awardwiz/backend/award-alerts/http-handlers.ts`.
+
+Routes:
+
+- `GET /health`
+- `POST /api/award-alerts`
+- `GET /api/award-alerts`
+- `GET /api/award-alerts/:id`
+- `PATCH /api/award-alerts/:id`
+- `POST /api/award-alerts/:id/pause`
+- `POST /api/award-alerts/:id/resume`
+- `DELETE /api/award-alerts/:id`
+- `GET /api/award-alerts/status`
+- `POST /api/award-alerts/operations/run-evaluator`
+- `POST /api/award-alerts/operations/run-notifier`
+- `POST /api/award-alerts/operations/preview`
+- `GET /api/award-alerts/:id/runs`
+- `GET /api/award-alerts/:id/notifications`
+
+The API is JSON-only and returns stable error objects shaped like `{ error: { code, message } }`.
 
 ### Alaska provider-specific logic
 

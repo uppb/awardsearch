@@ -323,6 +323,121 @@ describe("award alerts service", () => {
     expect(repository.deleteAlert).not.toHaveBeenCalled()
   })
 
+  it("rejects preview requests for unsupported programs", async () => {
+    const { repository } = createRepository()
+    const service = createAwardAlertsService({
+      repository,
+      providers: {},
+      now: () => new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-1",
+      runtimeStatus: () => ({ evaluator: { running: false }, notifier: { running: false } }),
+      runEvaluator: vi.fn(),
+      runNotifier: vi.fn(),
+    })
+
+    await expect(service.previewAlert({
+      program: "aeroplan",
+      origin: "SHA",
+      destination: "HND",
+      startDate: "2026-05-01",
+      endDate: "2026-05-03",
+      cabin: "business",
+    })).rejects.toThrow("unsupported award program: aeroplan")
+  })
+
+  it("fans out date-range preview searches before awaiting provider results", async () => {
+    const { repository } = createRepository()
+    const resolvers: Array<(flights: Array<{
+      flightNo: string
+      departureDateTime: string
+      arrivalDateTime: string
+      origin: string
+      destination: string
+      duration: number
+      aircraft: string
+      segmentCount: number
+      amenities: { hasPods: boolean, hasWiFi: boolean }
+      fares: Array<{
+        cabin: "business"
+        miles: number
+        cash: number
+        currencyOfCash: string
+        scraper: "alaska"
+        bookingClass: string
+        isSaverFare: boolean
+      }>
+    }>) => void> = []
+    const search = vi.fn(() => new Promise<typeof flights[number][]>((resolve) => {
+      resolvers.push(resolve)
+    }))
+    const evaluateMatches = vi.fn(() => ({
+      hasMatch: false,
+      matchedDates: [],
+      matchingResults: [],
+      bestMatchSummary: undefined,
+      matchFingerprint: "preview-fp",
+      bookingUrl: "https://example.test/booking",
+    }))
+    const flights = [{
+      flightNo: "AS 843",
+      departureDateTime: "2026-05-02 09:10",
+      arrivalDateTime: "2026-05-02 11:50",
+      origin: "SHA",
+      destination: "HND",
+      duration: 400,
+      aircraft: "A321",
+      segmentCount: 1,
+      amenities: { hasPods: false, hasWiFi: true },
+      fares: [{
+        cabin: "business" as const,
+        miles: 35000,
+        cash: 5.6,
+        currencyOfCash: "USD",
+        scraper: "alaska" as const,
+        bookingClass: "D",
+        isSaverFare: false,
+      }],
+    }]
+
+    const service = createAwardAlertsService({
+      repository,
+      providers: {
+        alaska: {
+          search,
+          evaluateMatches,
+        },
+      },
+      now: () => new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-1",
+      runtimeStatus: () => ({ evaluator: { running: false }, notifier: { running: false } }),
+      runEvaluator: vi.fn(),
+      runNotifier: vi.fn(),
+    })
+
+    const previewPromise = service.previewAlert({
+      program: "alaska",
+      origin: "SHA",
+      destination: "HND",
+      startDate: "2026-05-01",
+      endDate: "2026-05-03",
+      cabin: "business",
+      maxMiles: 35000,
+    })
+
+    await Promise.resolve()
+
+    expect(search).toHaveBeenCalledTimes(3)
+
+    for (const resolve of resolvers)
+      resolve(flights)
+
+    await expect(previewPromise).resolves.toMatchObject({
+      hasMatch: false,
+      matchedDates: [],
+    })
+    expect(evaluateMatches).toHaveBeenCalledOnce()
+  })
+
   it("returns the injected runtime status and forwards trigger calls", async () => {
     const { repository } = createRepository()
     const status = { evaluator: { running: true, lastStartedAt: "2026-04-20T00:00:00.000Z" }, notifier: { running: false }, databasePath: "./tmp/award-alerts.sqlite" }

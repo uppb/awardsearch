@@ -18,9 +18,15 @@ import {
 
 export type AwardAlertsRuntimeStatus = {
   databasePath?: string
-  evaluator: { running: boolean } & Record<string, unknown>
-  notifier: { running: boolean } & Record<string, unknown>
-} & Record<string, unknown>
+  evaluator: { running: boolean, [key: string]: unknown }
+  notifier: { running: boolean, [key: string]: unknown }
+  [key: string]: unknown
+}
+
+export type AwardAlertsTriggerResult = {
+  started: boolean
+  reason?: string
+}
 
 export type AwardAlertsServiceRepository = {
   listAlerts: () => AwardAlert[]
@@ -41,8 +47,8 @@ export type AwardAlertsServiceDependencies = {
   now: () => Date
   generateId: () => string
   runtimeStatus: () => AwardAlertsRuntimeStatus
-  runEvaluator: () => Promise<unknown>
-  runNotifier: () => Promise<unknown>
+  runEvaluator: () => Promise<AwardAlertsTriggerResult>
+  runNotifier: () => Promise<AwardAlertsTriggerResult>
 }
 
 const unsupportedProviderMessage = (program: string) => `unsupported award program: ${program}`
@@ -64,9 +70,9 @@ const searchProviderForPreview = async ({
   const provider = assertSupportedProvider(providers, alert.program)
 
   const searchedDates = expandAlertDates(alert)
-  const flights: FlightWithFares[] = []
-  for (const departureDate of searchedDates)
-    flights.push(...await provider.search({ origin: alert.origin, destination: alert.destination, departureDate }))
+  const flights = (await Promise.all(searchedDates.map(departureDate =>
+    provider.search({ origin: alert.origin, destination: alert.destination, departureDate })
+  ))).flat() as FlightWithFares[]
 
   return provider.evaluateMatches(alert, flights)
 }
