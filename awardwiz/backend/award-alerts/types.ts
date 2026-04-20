@@ -1,3 +1,5 @@
+import type { FlightWithFares } from "../../types/scrapers.js"
+
 export type AwardProgram = string
 export type AwardAlertDateMode = "single_date" | "date_range"
 export type AwardAlertCabin = "economy" | "business" | "first"
@@ -77,6 +79,36 @@ export type NotificationEvent = {
   payload: NotificationEventPayload
   sentAt: string | undefined
   failureReason: string | undefined
+}
+
+export type AwardSearchQuery = {
+  origin: string
+  destination: string
+  departureDate: string
+}
+
+export type AwardSearch = (query: AwardSearchQuery) => Promise<FlightWithFares[]>
+
+export type AwardAlertMatchEvaluation = {
+  hasMatch: boolean
+  matchedDates: string[]
+  matchingResults: AwardAlertMatch[]
+  bestMatchSummary: AwardAlertMatch | undefined
+  matchFingerprint: string
+  bookingUrl: string
+}
+
+export type AwardAlertProvider = {
+  search: AwardSearch
+  evaluateMatches: (alert: AwardAlert, flights: FlightWithFares[]) => AwardAlertMatchEvaluation
+}
+
+export type AwardAlertProviders = Partial<Record<AwardProgram, AwardAlertProvider>>
+
+export type AwardAlertsRepository = {
+  getState: (alertId: string) => Promise<AwardAlertState | undefined>
+  saveEvaluation: (evaluation: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) => Promise<void>
+  createNotificationEvent: (event: NotificationEvent) => Promise<void>
 }
 
 type AwardAlertBase = {
