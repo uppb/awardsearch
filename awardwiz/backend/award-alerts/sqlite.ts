@@ -3,7 +3,7 @@ import Database from "better-sqlite3"
 const SCHEMA_V1_SQL = `
   CREATE TABLE award_alerts (
     id TEXT PRIMARY KEY,
-    program TEXT NOT NULL CHECK (program = 'alaska'),
+    program TEXT NOT NULL,
     user_id TEXT NOT NULL,
     origin TEXT NOT NULL,
     destination TEXT NOT NULL,
@@ -24,18 +24,21 @@ const SCHEMA_V1_SQL = `
     updated_at TEXT NOT NULL,
     CHECK (
       (
-        date_mode = 'single_date'
-        AND date IS NOT NULL
-        AND start_date IS NULL
-        AND end_date IS NULL
+        (
+          date_mode = 'single_date'
+          AND date IS NOT NULL
+          AND start_date IS NULL
+          AND end_date IS NULL
+        )
+        OR
+        (
+          date_mode = 'date_range'
+          AND date IS NULL
+          AND start_date IS NOT NULL
+          AND end_date IS NOT NULL
+        )
       )
-      OR
-      (
-        date_mode = 'date_range'
-        AND date IS NULL
-        AND start_date IS NOT NULL
-        AND end_date IS NOT NULL
-      )
+      AND (active = 0 OR next_check_at IS NOT NULL)
     )
   );
 
@@ -78,7 +81,7 @@ const SCHEMA_V1_SQL = `
     alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'attempting', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
     claimed_at TEXT,
     claim_token TEXT,
     attempted_at TEXT,
@@ -95,7 +98,7 @@ const EXPECTED_SCHEMA_OBJECTS = {
   award_alerts: `
     CREATE TABLE award_alerts (
       id TEXT PRIMARY KEY,
-      program TEXT NOT NULL CHECK (program = 'alaska'),
+      program TEXT NOT NULL,
       user_id TEXT NOT NULL,
       origin TEXT NOT NULL,
       destination TEXT NOT NULL,
@@ -116,18 +119,21 @@ const EXPECTED_SCHEMA_OBJECTS = {
       updated_at TEXT NOT NULL,
       CHECK (
         (
-          date_mode = 'single_date'
-          AND date IS NOT NULL
-          AND start_date IS NULL
-          AND end_date IS NULL
+          (
+            date_mode = 'single_date'
+            AND date IS NOT NULL
+            AND start_date IS NULL
+            AND end_date IS NULL
+          )
+          OR
+          (
+            date_mode = 'date_range'
+            AND date IS NULL
+            AND start_date IS NOT NULL
+            AND end_date IS NOT NULL
+          )
         )
-        OR
-        (
-          date_mode = 'date_range'
-          AND date IS NULL
-          AND start_date IS NOT NULL
-          AND end_date IS NOT NULL
-        )
+        AND (active = 0 OR next_check_at IS NOT NULL)
       )
     )
   `,
@@ -167,7 +173,7 @@ const EXPECTED_SCHEMA_OBJECTS = {
       alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'attempting', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
       claimed_at TEXT,
       claim_token TEXT,
       attempted_at TEXT,

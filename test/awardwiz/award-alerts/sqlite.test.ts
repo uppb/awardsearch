@@ -109,7 +109,7 @@ describe("openAwardAlertsDb", () => {
         award_alerts: normalizeSql(`
           CREATE TABLE award_alerts (
             id TEXT PRIMARY KEY,
-            program TEXT NOT NULL CHECK (program = 'alaska'),
+            program TEXT NOT NULL,
             user_id TEXT NOT NULL,
             origin TEXT NOT NULL,
             destination TEXT NOT NULL,
@@ -129,9 +129,12 @@ describe("openAwardAlertsDb", () => {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             CHECK (
-              (date_mode = 'single_date' AND date IS NOT NULL AND start_date IS NULL AND end_date IS NULL)
-              OR
-              (date_mode = 'date_range' AND date IS NULL AND start_date IS NOT NULL AND end_date IS NOT NULL)
+              (
+                (date_mode = 'single_date' AND date IS NOT NULL AND start_date IS NULL AND end_date IS NULL)
+                OR
+                (date_mode = 'date_range' AND date IS NULL AND start_date IS NOT NULL AND end_date IS NOT NULL)
+              )
+              AND (active = 0 OR next_check_at IS NOT NULL)
             )
           )
         `),
@@ -141,7 +144,7 @@ describe("openAwardAlertsDb", () => {
             alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+            status TEXT NOT NULL CHECK (status IN ('pending', 'attempting', 'processing', 'sent', 'failed', 'delivered_unconfirmed')),
             claimed_at TEXT,
             claim_token TEXT,
             attempted_at TEXT,
@@ -165,6 +168,47 @@ describe("openAwardAlertsDb", () => {
           ON notification_events(status, claimed_at, created_at)
         `),
       })
+    } finally {
+      db.close()
+    }
+  })
+
+  it("requires active alerts to have next_check_at", () => {
+    const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
+    const dbPath = join(dir, "alerts.sqlite")
+    const db = openAwardAlertsDb(dbPath)
+
+    try {
+      expect(() => db.prepare(`
+        INSERT INTO award_alerts (
+          id, program, user_id, origin, destination, date_mode, date, start_date, end_date, cabin,
+          nonstop_only, max_miles, max_cash, active, poll_interval_minutes, min_notification_interval_minutes,
+          last_checked_at, next_check_at, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+      `).run(
+        "alert-1",
+        "any-provider",
+        "user-1",
+        "SFO",
+        "HNL",
+        "single_date",
+        "2026-04-19",
+        null,
+        null,
+        "economy",
+        1,
+        null,
+        null,
+        1,
+        30,
+        60,
+        null,
+        null,
+        "2026-04-19T00:00:00Z",
+        "2026-04-19T00:00:00Z",
+      )).toThrow("CHECK constraint failed")
     } finally {
       db.close()
     }
@@ -211,7 +255,7 @@ describe("openAwardAlertsDb", () => {
         )
       `).run({
         id: "alert-1",
-        program: "alaska",
+        program: "any-provider",
         user_id: "user-1",
         origin: "SFO",
         destination: "HNL",
@@ -227,7 +271,7 @@ describe("openAwardAlertsDb", () => {
         poll_interval_minutes: 30,
         min_notification_interval_minutes: 60,
         last_checked_at: null,
-        next_check_at: null,
+        next_check_at: "2026-04-20T00:00:00Z",
         created_at: "2026-04-19T00:00:00Z",
         updated_at: "2026-04-19T00:00:00Z",
       })
