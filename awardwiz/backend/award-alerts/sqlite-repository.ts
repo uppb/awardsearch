@@ -1,79 +1,16 @@
 import Database from "better-sqlite3"
 import dayjs from "dayjs"
 import { randomUUID } from "node:crypto"
-import type { AwardAlert, AwardAlertCabin } from "./types.js"
-
-type AwardAlertMatch = {
-  date: string
-  flightNo: string
-  origin: string
-  destination: string
-  departureDateTime: string
-  arrivalDateTime: string
-  cabin: AwardAlertCabin
-  miles: number
-  cash: number
-  currencyOfCash: string
-  bookingClass: string | undefined
-  segmentCount: number
-}
-
-type AwardAlertState = {
-  alertId: string
-  hasMatch: boolean
-  matchedDates: string[]
-  matchingResults: AwardAlertMatch[]
-  bestMatchSummary: AwardAlertMatch | undefined
-  matchFingerprint: string
-  lastMatchAt: string | undefined
-  lastNotifiedAt: string | undefined
-  lastErrorAt: string | undefined
-  lastErrorMessage: string | undefined
-  updatedAt: string
-}
-
-type AwardAlertRun = {
-  id: string
-  alertId: string
-  startedAt: string
-  completedAt: string
-  searchedDates: string[]
-  scrapeCount: number
-  scrapeSuccessCount: number
-  scrapeErrorCount: number
-  matchedResultCount: number
-  hasMatch: boolean
-  errorSummary: string | undefined
-}
-
-type NotificationEventStatus = "pending" | "processing" | "attempting" | "delivered_unconfirmed" | "sent" | "failed"
-
-type NotificationPayload = {
-  origin: string
-  destination: string
-  cabin: AwardAlertCabin
-  matchedDates: string[]
-  matchCount: number
-  nonstopOnly: boolean
-  maxMiles: number | undefined
-  maxCash: number | undefined
-  bestMatch: AwardAlertMatch | undefined
-  bookingUrl: string
-}
-
-type NotificationEvent = {
-  id: string
-  alertId: string
-  userId: string
-  createdAt: string
-  status: NotificationEventStatus
-  claimedAt?: string
-  claimToken?: string
-  attemptedAt?: string
-  payload: NotificationPayload
-  sentAt: string | undefined
-  failureReason: string | undefined
-}
+import type {
+  AwardAlert,
+  AwardAlertCabin,
+  AwardAlertMatch,
+  AwardAlertRun,
+  AwardAlertState,
+  NotificationEvent,
+  NotificationEventPayload,
+  NotificationEventStatus,
+} from "./types.js"
 
 type AwardAlertRow = {
   id: string
@@ -131,6 +68,11 @@ const fromDbBoolean = (value: number) => value === 1
 
 const parseJson = <T>(value: string): T => JSON.parse(value) as T
 
+function invariant(condition: unknown, message: string): asserts condition {
+  if (!condition)
+    throw new Error(message)
+}
+
 const mapAlertRow = (row: AwardAlertRow): AwardAlert => {
   const base = {
     id: row.id,
@@ -152,18 +94,25 @@ const mapAlertRow = (row: AwardAlertRow): AwardAlert => {
   }
 
   if (row.date_mode === "single_date") {
+    invariant(row.date !== null, `award alert ${row.id} is missing date for single_date mode`)
+    invariant(row.start_date === null && row.end_date === null, `award alert ${row.id} has range fields in single_date mode`)
     return {
       ...base,
       dateMode: "single_date",
-      date: row.date ?? "",
+      date: row.date,
     }
   }
+
+  invariant(row.date_mode === "date_range", `award alert ${row.id} has unsupported date mode ${row.date_mode}`)
+  invariant(row.date === null, `award alert ${row.id} has single date field in date_range mode`)
+  invariant(row.start_date !== null, `award alert ${row.id} is missing start_date for date_range mode`)
+  invariant(row.end_date !== null, `award alert ${row.id} is missing end_date for date_range mode`)
 
   return {
     ...base,
     dateMode: "date_range",
-    startDate: row.start_date ?? "",
-    endDate: row.end_date ?? "",
+    startDate: row.start_date,
+    endDate: row.end_date,
   }
 }
 
@@ -190,7 +139,7 @@ const mapNotificationEventRow = (row: NotificationEventRow): NotificationEvent =
   claimedAt: row.claimed_at ?? undefined,
   claimToken: row.claim_token ?? undefined,
   attemptedAt: row.attempted_at ?? undefined,
-  payload: parseJson<NotificationPayload>(row.payload),
+  payload: parseJson<NotificationEventPayload>(row.payload),
   sentAt: row.sent_at ?? undefined,
   failureReason: row.failure_reason ?? undefined,
 })
@@ -288,17 +237,6 @@ export class SqliteAwardAlertsRepository {
           @id, @alert_id, @started_at, @completed_at, @searched_dates, @scrape_count, @scrape_success_count,
           @scrape_error_count, @matched_result_count, @has_match, @error_summary
         )
-        ON CONFLICT(id) DO UPDATE SET
-          alert_id = excluded.alert_id,
-          started_at = excluded.started_at,
-          completed_at = excluded.completed_at,
-          searched_dates = excluded.searched_dates,
-          scrape_count = excluded.scrape_count,
-          scrape_success_count = excluded.scrape_success_count,
-          scrape_error_count = excluded.scrape_error_count,
-          matched_result_count = excluded.matched_result_count,
-          has_match = excluded.has_match,
-          error_summary = excluded.error_summary
       `).run({
         id: run.id,
         alert_id: run.alertId,
@@ -373,7 +311,7 @@ export class SqliteAwardAlertsRepository {
         next_check_at: claimedUntil,
         updated_at: nowIso,
       }))
-    })()
+    }).immediate()
   }
 
   claimPendingNotificationEvents(limit: number, claimedAt: string, staleBefore: string): NotificationEvent[] {
@@ -438,7 +376,7 @@ export class SqliteAwardAlertsRepository {
           claim_token: claimToken,
         })
       })
-    })()
+    }).immediate()
   }
 
   markNotificationAttempting(id: string, attemptedAt: string, claimToken: string | undefined) {

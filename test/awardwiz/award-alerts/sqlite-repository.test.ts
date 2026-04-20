@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite.js"
 import { SqliteAwardAlertsRepository } from "../../../awardwiz/backend/award-alerts/sqlite-repository.js"
+import type { AwardAlert, AwardAlertRun, AwardAlertState, NotificationEvent } from "../../../awardwiz/backend/award-alerts/types.js"
 
 const openRepository = () => {
   const db = openAwardAlertsDb(join(mkdtempSync(join(tmpdir(), "award-alerts-repo-")), "alerts.sqlite"))
@@ -13,31 +14,31 @@ const openRepository = () => {
   }
 }
 
-const buildAlert = (overrides: Record<string, unknown> = {}) => ({
-  id: "alert-1",
-  program: "alaska",
-  userId: "user-1",
-  origin: "SFO",
-  destination: "HNL",
-  dateMode: "single_date" as const,
-  date: "2026-07-01",
-  startDate: undefined,
-  endDate: undefined,
-  cabin: "economy" as const,
-  nonstopOnly: true,
-  maxMiles: undefined,
-  maxCash: undefined,
-  active: true,
-  pollIntervalMinutes: 15,
-  minNotificationIntervalMinutes: 60,
-  lastCheckedAt: undefined,
-  nextCheckAt: "2026-04-19T00:00:00.000Z",
-  createdAt: "2026-04-19T00:00:00.000Z",
-  updatedAt: "2026-04-19T00:00:00.000Z",
+const buildAlert = (overrides: Partial<AwardAlert> = {}): AwardAlert => ({
+  ...({
+    id: "alert-1",
+    program: "alaska",
+    userId: "user-1",
+    origin: "SFO",
+    destination: "HNL",
+    dateMode: "single_date",
+    date: "2026-07-01",
+    cabin: "economy",
+    nonstopOnly: true,
+    maxMiles: undefined,
+    maxCash: undefined,
+    active: true,
+    pollIntervalMinutes: 15,
+    minNotificationIntervalMinutes: 60,
+    lastCheckedAt: undefined,
+    nextCheckAt: "2026-04-19T00:00:00.000Z",
+    createdAt: "2026-04-19T00:00:00.000Z",
+    updatedAt: "2026-04-19T00:00:00.000Z",
+  } satisfies AwardAlert),
   ...overrides,
-})
+}) as AwardAlert
 
-const buildState = (overrides: Record<string, unknown> = {}) => ({
+const buildState = (overrides: Partial<AwardAlertState> = {}): AwardAlertState => ({
   alertId: "alert-1",
   hasMatch: true,
   matchedDates: ["2026-07-01"],
@@ -78,7 +79,7 @@ const buildState = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const buildRun = (overrides: Record<string, unknown> = {}) => ({
+const buildRun = (overrides: Partial<AwardAlertRun> = {}): AwardAlertRun => ({
   id: "run-1",
   alertId: "alert-1",
   startedAt: "2026-04-19T00:05:00.000Z",
@@ -93,7 +94,7 @@ const buildRun = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const buildEvent = (overrides: Record<string, unknown> = {}) => ({
+const buildEvent = (overrides: Partial<NotificationEvent> = {}): NotificationEvent => ({
   id: "event-1",
   alertId: "alert-1",
   userId: "user-1",
@@ -162,6 +163,64 @@ describe("SqliteAwardAlertsRepository", () => {
         searched_dates: "[\"2026-07-01\"]",
         has_match: 1,
       }])
+      expect(db.prepare("SELECT last_checked_at, next_check_at, updated_at FROM award_alerts WHERE id = ?").get("alert-1")).toEqual({
+        last_checked_at: "2026-04-19T00:05:00.000Z",
+        next_check_at: "2026-04-19T00:20:00.000Z",
+        updated_at: "2026-04-19T00:05:00.000Z",
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  it("rejects duplicate run ids without mutating prior run history or alert state", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+
+      repo.saveEvaluation({
+        alert: buildAlert(),
+        state: buildState({
+          updatedAt: "2026-04-19T00:05:00.000Z",
+          matchFingerprint: "fp-1",
+        }),
+        run: buildRun({
+          id: "run-duplicate",
+          completedAt: "2026-04-19T00:05:05.000Z",
+          matchedResultCount: 1,
+        }),
+      })
+
+      expect(() => repo.saveEvaluation({
+        alert: buildAlert(),
+        state: buildState({
+          updatedAt: "2026-04-19T00:10:00.000Z",
+          matchFingerprint: "fp-2",
+          hasMatch: false,
+          matchedDates: [],
+          matchingResults: [],
+          bestMatchSummary: undefined,
+          lastMatchAt: undefined,
+        }),
+        run: buildRun({
+          id: "run-duplicate",
+          completedAt: "2026-04-19T00:10:05.000Z",
+          matchedResultCount: 0,
+          hasMatch: false,
+        }),
+      })).toThrow(/unique|constraint/i)
+
+      expect(repo.getState("alert-1")).toEqual(buildState({
+        updatedAt: "2026-04-19T00:05:00.000Z",
+        matchFingerprint: "fp-1",
+      }))
+      expect(db.prepare("SELECT id, completed_at, matched_result_count, has_match FROM award_alert_runs WHERE id = ?").get("run-duplicate")).toEqual({
+        id: "run-duplicate",
+        completed_at: "2026-04-19T00:05:05.000Z",
+        matched_result_count: 1,
+        has_match: 1,
+      })
       expect(db.prepare("SELECT last_checked_at, next_check_at, updated_at FROM award_alerts WHERE id = ?").get("alert-1")).toEqual({
         last_checked_at: "2026-04-19T00:05:00.000Z",
         next_check_at: "2026-04-19T00:20:00.000Z",
@@ -262,6 +321,44 @@ describe("SqliteAwardAlertsRepository", () => {
     } finally {
       db.close()
     }
+  })
+
+  it("uses immediate transactions for both claim paths", async () => {
+    let immediateCalls = 0
+    let deferredCalls = 0
+    const fakeDb = {
+      transaction<T extends (...args: any[]) => unknown>(fn: T) {
+        const wrapped = (...args: Parameters<T>) => {
+          deferredCalls += 1
+          return fn(...args)
+        }
+        wrapped.default = (...args: Parameters<T>) => {
+          deferredCalls += 1
+          return fn(...args)
+        }
+        wrapped.immediate = (...args: Parameters<T>) => {
+          immediateCalls += 1
+          return fn(...args)
+        }
+        wrapped.deferred = (...args: Parameters<T>) => fn(...args)
+        wrapped.exclusive = (...args: Parameters<T>) => fn(...args)
+        return wrapped
+      },
+      prepare() {
+        return {
+          all: () => [],
+          get: () => undefined,
+          run: () => ({ changes: 1 }),
+        }
+      },
+    }
+    const repo = new SqliteAwardAlertsRepository(fakeDb as any)
+
+    repo.claimDueAlerts("2026-04-19T00:00:00.000Z", 10, 5)
+    repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
+
+    expect(immediateCalls).toBe(2)
+    expect(deferredCalls).toBe(0)
   })
 
   it("guards notification attempt transitions with the claim token and records terminal states", async () => {
