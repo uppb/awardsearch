@@ -11,7 +11,6 @@ jobs:
     environment: ci
     env:
       PUPPETEER_SKIP_DOWNLOAD: "true"
-      VITE_FIREBASE_CONFIG_JSON: ${{ secrets.VITE_FIREBASE_CONFIG_JSON }}
     steps:
       - uses: actions/checkout@v3
       - name: Run checks from container

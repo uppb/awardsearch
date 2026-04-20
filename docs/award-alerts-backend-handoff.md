@@ -21,7 +21,7 @@ This is the current intended direction:
 - Discord webhook delivery instead of email for the new alert backend
 - Alaska as the first provider, with the provider implementation now fully owned inside the generic backend boundary
 
-The legacy Firestore/email marked-fares worker/runtime has been removed from this branch. Any remaining browser-side marked-fares UI code is outside this backend handoff and should not be treated as a coexisting alert runtime.
+The legacy Firestore/email marked-fares worker/runtime has been removed from this branch. The retired browser search product is no longer part of this repository.
 
 ## What Changed
 
@@ -48,7 +48,7 @@ Compared with the older in-progress alert work, the major changes are:
 19. The internal admin API now has a checked-in OpenAPI contract plus a human-readable guide for local/operator use.
 20. A dedicated Dockerfile now exists for the combined service runtime instead of relying on the split worker entrypoints.
 21. The internal admin API now exposes a raw scraper batch endpoint for one-off validation calls, returning per-item Arkalis-wrapped scraper responses without mutating alert state.
-22. The old browser-facing scraper HTTP server has been retired; operator validation now goes through `just run-award-alerts-service`, `just run-scraper`, and `POST /api/award-alerts/operations/run-scraper`.
+22. The old browser-facing scraper HTTP server and browser search product have been retired; operator validation now goes through `just run-award-alerts-service`, `just run-scraper`, and `POST /api/award-alerts/operations/run-scraper`.
 
 ## Current Ownership Boundaries
 
@@ -258,6 +258,7 @@ Current provider support:
 Current reality:
 
 - this is an internal validation/debugging surface, not an alert workflow
+- the browser search product that previously consumed raw scraper calls has been retired
 - the response preserves the raw Arkalis wrapper with `result` and `logLines` for successful items
 - unsupported scraper names fail the request with `bad_request`
 - per-item runtime failures remain localized to the failed item instead of aborting the whole batch

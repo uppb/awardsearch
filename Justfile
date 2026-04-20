@@ -21,10 +21,9 @@ check: build test
   NODE_NO_WARNINGS=1 npm exec -- depcheck --ignores depcheck,npm-check,typescript,devtools-protocol,@types/har-format,@iconify/json,~icons,@vitest/coverage-c8,vite-node,node-fetch,geo-tz,@types/node-fetch,@svgr/plugin-jsx,typescript-json-schema,ajv-cli
   @echo 'ok'
 
-# runs the github actions, note that this needs a properly configured .env
+# runs the github actions checks, note that this needs a properly configured .env
 check-with-act:
   act --job run-checks --rm
-  act --job deploy --rm
   @echo 'ok'
 
 # ⭐️ runs the tests (with stubs/mocks)
@@ -36,24 +35,12 @@ lets-upgrade-packages:
   npm exec -- npm-check -u
 
 ##############################
-# FRONTEND
+# SCRAPER SUPPORT
 ##############################
-
-# ⭐️ starts the vite frontend
-run-vite args="":
-  npm exec -- vite --config awardwiz/vite.config.ts {{args}}
 
 # generate .schema.json files from .ts files
 gen-json-schemas: build
   npm exec -- typescript-json-schema tsconfig.json ScrapersConfig --topRef --noExtraProps | sed 's/import.*)\.//g' > config.schema.json
-
-# generate statics from internet (used by Github Actions when deploying)
-gen-statics:
-  npm exec -- vite-node --config awardwiz/vite.config.ts awardwiz/workers/gen-statics.ts
-
-# generate awardwiz/dist directory for frontend (used by Github Actions when deploying)
-gen-frontend-dist:
-  just run-vite build
 
 run-award-alerts-evaluator:
   if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
