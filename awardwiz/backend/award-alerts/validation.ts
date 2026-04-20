@@ -22,7 +22,7 @@ export type AwardAlertWriteInput = {
   minNotificationIntervalMinutes?: number
 }
 
-export type AwardAlertPatchInput = Partial<Omit<AwardAlertWriteInput, "program">> & {
+export type AwardAlertPatchInput = Omit<Partial<Omit<AwardAlertWriteInput, "program">>, "userId" | "maxMiles" | "maxCash"> & {
   userId?: string | null
   maxMiles?: number | null
   maxCash?: number | null
@@ -140,13 +140,14 @@ function resolveDateSelection(input: DateInput, fallback?: DateFallback): DateSe
   const hasEndDate = typeof input.endDate === "string"
 
   if (hasSingleDate) {
+    const date = input.date as string
     if (hasStartDate || hasEndDate)
       throw new Error("Use either date or startDate/endDate")
 
-    assertDate(input.date, "date")
+    assertDate(date, "date")
     return {
       dateMode: "single_date",
-      date: input.date,
+      date,
     }
   }
 
@@ -154,15 +155,17 @@ function resolveDateSelection(input: DateInput, fallback?: DateFallback): DateSe
     if (!hasStartDate || !hasEndDate)
       throw new Error("startDate and endDate are both required for date-range alerts")
 
-    assertDate(input.startDate, "startDate")
-    assertDate(input.endDate, "endDate")
-    if (input.startDate > input.endDate)
+    const startDate = input.startDate as string
+    const endDate = input.endDate as string
+    assertDate(startDate, "startDate")
+    assertDate(endDate, "endDate")
+    if (startDate > endDate)
       throw new Error("startDate must be on or before endDate")
 
     return {
       dateMode: "date_range",
-      startDate: input.startDate,
-      endDate: input.endDate,
+      startDate,
+      endDate,
     }
   }
 

@@ -436,7 +436,7 @@ describe("SqliteAwardAlertsRepository", () => {
       expect(db.prepare("SELECT user_id FROM notification_events WHERE id = ?").get("event-null-user")).toEqual({
         user_id: null,
       })
-      expect(repo.claimPendingNotificationEvents("2026-04-19T00:20:00.000Z", 10, 5)).toHaveLength(1)
+      expect(repo.claimPendingNotificationEvents(10, "2026-04-19T00:20:00.000Z", "2026-04-19T00:15:00.000Z")).toHaveLength(1)
     } finally {
       db.close()
     }

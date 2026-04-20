@@ -2,8 +2,7 @@
 
 import { pathToFileURL } from "node:url"
 import { evaluateOneAlert } from "../backend/award-alerts/evaluator.js"
-import { alaskaProvider } from "../backend/award-alerts/providers/alaska/matcher.js"
-import { memoizeAlaskaSearch } from "../backend/award-alerts/providers/alaska/search.js"
+import { buildDefaultAwardAlertProviders } from "../backend/award-alerts/providers/index.js"
 import { claimDueAlerts } from "../backend/award-alerts/scheduler.js"
 import { SqliteAwardAlertsRepository } from "../backend/award-alerts/sqlite-repository.js"
 import { openAwardAlertsDb } from "../backend/award-alerts/sqlite.js"
@@ -20,14 +19,7 @@ type EvaluatorWorkerOptions = {
   now?: Date
 }
 
-const buildDefaultProviders = (): AwardAlertProviders => ({
-  alaska: {
-    ...alaskaProvider,
-    search: memoizeAlaskaSearch(alaskaProvider.search),
-  },
-})
-
-export const runEvaluatorWorker = async ({ databasePath, repository: injectedRepository, providers = buildDefaultProviders(), now = new Date() }: EvaluatorWorkerOptions = {}) => {
+export const runEvaluatorWorker = async ({ databasePath, repository: injectedRepository, providers = buildDefaultAwardAlertProviders(), now = new Date() }: EvaluatorWorkerOptions = {}) => {
   const dbPath = databasePath ?? process.env["DATABASE_PATH"] ?? "./tmp/award-alerts.sqlite"
   const db = injectedRepository ? undefined : openAwardAlertsDb(dbPath)
   const repository = injectedRepository ?? new SqliteAwardAlertsRepository(db!)

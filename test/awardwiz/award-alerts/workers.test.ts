@@ -316,4 +316,50 @@ describe("award alert workers", () => {
       checkDb.close()
     }
   })
+
+  it("runEvaluatorWorker uses the shared default provider builder when providers are omitted", async () => {
+    const dbPath = createDbPath()
+    const db = openAwardAlertsDb(dbPath)
+    const repository = new SqliteAwardAlertsRepository(db)
+    const search = vi.fn(async () => [])
+    const evaluateMatches = vi.fn(() => ({
+      hasMatch: false,
+      matchedDates: [],
+      matchingResults: [],
+      bestMatchSummary: undefined,
+      matchFingerprint: "preview-fingerprint",
+      bookingUrl: "https://example.test/booking",
+    }))
+
+    try {
+      repository.insertAlert(buildAlert({ userId: undefined }))
+
+      vi.resetModules()
+      vi.doMock("../../../awardwiz/backend/award-alerts/providers/index.js", () => ({
+        buildDefaultAwardAlertProviders: () => ({
+          alaska: {
+            search,
+            evaluateMatches,
+          },
+        }),
+      }))
+
+      const { runEvaluatorWorker } = await import("../../../awardwiz/workers/award-alerts-evaluator.js")
+
+      await runEvaluatorWorker({
+        databasePath: dbPath,
+        now: new Date("2026-04-19T00:00:00.000Z"),
+      })
+
+      expect(search).toHaveBeenCalledWith({
+        origin: "SFO",
+        destination: "HNL",
+        departureDate: "2026-07-01",
+      })
+      expect(evaluateMatches).toHaveBeenCalledOnce()
+    } finally {
+      db.close()
+      vi.unmock("../../../awardwiz/backend/award-alerts/providers/index.js")
+    }
+  })
 })

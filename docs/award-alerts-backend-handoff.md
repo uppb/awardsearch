@@ -1,6 +1,6 @@
 # Award Alerts Backend Handoff
 
-Date: 2026-04-19
+Date: 2026-04-20
 Audience: engineers taking over the backend alert service work
 
 ## Summary
@@ -34,6 +34,8 @@ Compared with the older in-progress alert work, the major changes are:
 10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 11. Legacy v1 SQLite databases still open and migrate to v2 on startup before the nullable schema takes effect.
 12. The repository surface now supports in-place alert updates plus alert-scoped run and notification history inspection.
+13. A service/application layer now sits above the repository and owns CRUD, preview, history access, status passthrough, and manual evaluator/notifier triggers without introducing HTTP concerns yet.
+14. The evaluator worker now shares a default provider builder with the future service path instead of maintaining its own local Alaska provider wiring.
 
 ## Current Ownership Boundaries
 
@@ -48,6 +50,8 @@ These files are the primary backend surface:
 - `awardwiz/backend/award-alerts/scheduler.ts`
 - `awardwiz/backend/award-alerts/evaluator.ts`
 - `awardwiz/backend/award-alerts/notifier.ts`
+- `awardwiz/backend/award-alerts/service.ts`
+- `awardwiz/backend/award-alerts/providers/index.ts`
 - `awardwiz/backend/award-alerts/cli.ts`
 - `awardwiz/workers/award-alerts-evaluator.ts`
 - `awardwiz/workers/award-alerts-notifier.ts`
@@ -59,6 +63,7 @@ What they own:
 - due-alert claiming
 - evaluation state and run history persistence
 - repository-backed alert updates and history reads
+- application/service orchestration for CRUD, preview, and status passthrough
 - notification event queueing
 - Discord delivery
 - CLI administration
