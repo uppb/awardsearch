@@ -49,7 +49,7 @@ export const createLoopRunner = ({
 
     timer = setTimeout(() => {
       timer = undefined
-      void trigger("scheduled")
+      void trigger("scheduled").catch(() => undefined)
     }, intervalMs)
   }
 
@@ -97,6 +97,11 @@ export const createLoopRunner = ({
 
     beginShutdown() {
       shutdownRequested = true
+
+      if (timer) {
+        clearTimeout(timer)
+        timer = undefined
+      }
     },
 
     async stop() {

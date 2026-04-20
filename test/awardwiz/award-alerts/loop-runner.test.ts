@@ -56,6 +56,29 @@ describe("createLoopRunner", () => {
     await expect(loop.trigger("manual")).rejects.toThrow("shutting down")
   })
 
+  it("does not emit an unhandled rejection when a scheduled tick fires after shutdown begins", async () => {
+    vi.useFakeTimers()
+    const unhandledRejection = vi.fn()
+    process.on("unhandledRejection", unhandledRejection)
+
+    const loop = createLoopRunner({
+      name: "evaluator",
+      intervalMs: 1_000,
+      run: vi.fn().mockResolvedValue(undefined),
+      now: vi.fn(() => new Date("2026-04-20T00:00:00.000Z")),
+      logger: { info: vi.fn(), error: vi.fn() },
+    })
+
+    loop.start()
+    await vi.advanceTimersByTimeAsync(1_000)
+    loop.beginShutdown()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await loop.stop()
+
+    process.off("unhandledRejection", unhandledRejection)
+    expect(unhandledRejection).not.toHaveBeenCalled()
+  })
+
   it("prevents overlapping runs and reports already-running manual triggers", async () => {
     const deferred = createDeferred()
     const now = vi.fn()
