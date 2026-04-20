@@ -120,6 +120,7 @@ const standardizeResults = (raw: DeltaResponse, query: AwardWizQuery) => {
       flightNo: `${segment.marketingCarrier.code} ${segment.marketingFlightNum}`,
       duration: segment.totalAirTime.day * 24 * 60 + segment.totalAirTime.hour * 60 + segment.totalAirTime.minute,
       aircraft: segment.flightLeg[0]?.aircraft.fleetName,
+      segmentCount: trip.flightSegment.length,
       fares: trip.viewSeatUrls[0]!.fareOffer.itineraryOfferList
         .filter((offer) => !offer.soldOut && offer.offered)
         .map((offer) => ({

@@ -31,6 +31,7 @@ export type FlightWithFares = {
   destination: string                    // "LHR"
   duration: number | undefined           // 62 (in minutes)
   aircraft: string | undefined           // "737"
+  segmentCount: number | undefined
   fares: FlightFare[]
   amenities: FlightAmenities
 }

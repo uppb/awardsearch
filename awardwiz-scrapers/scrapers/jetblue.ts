@@ -60,6 +60,7 @@ const standardizeResults = (raw: JetBlueResponse, query: AwardWizQuery) => {
       flightNo: `${segment.operatingAirlineCode} ${segment.flightno}`,
       duration: Number.parseInt(durationText.groups!["hours"]!, 10) * 60 + Number.parseInt(durationText.groups!["minutes"] ?? "0", 10),
       aircraft: segment.aircraft,
+      segmentCount: itinerary.segments.length,
       fares: [],
       amenities: {
         hasPods: segment.aircraft.includes("/Mint"),

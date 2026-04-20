@@ -1,51 +1,229 @@
 <div align="center">
-  <div><img src="wizard.png" style="width:200px" /></div>
+  <div><img src="wizard.png" style="width:200px" alt="AwardWiz logo" /></div>
   <div><h1>AwardWiz</h1></div>
-  <div><img src="screenshot.png" style="max-width:600px" /></div>
+  <div><img src="screenshot.png" style="max-width:600px" alt="AwardWiz screenshot" /></div>
 </div>
-<br/>
 
-AwardWiz searches airlines for award tickets so you can fly like a king, remorse-free. http://awardwiz.com
+AwardWiz is a TypeScript monorepo for searching airline award availability across multiple scrapers, merging those results into a single flight view, and presenting them in a React frontend.
 
-- Searches all permutations of origins and destinations (direct flights only for now)
-- See when low-fares are available (`X`, `I`, `O`, etc) vs cash-based fares (for [Chase Ultimate Rewards](https://thepointsguy.com/guide/redeeming-chase-ultimate-rewards-maximum-value/))
-- Searches: `aa`, `aeroplan`, `alaska`, `delta` (temp broken), `jetblue`, `southwest` and `united` (temp broken), along with `skiplagged` for points-to-cash estimates
-- Diligently tried to avoid the various commercial anti-botting mitigations used by airlines
-- Tries getting reliable WiFi and/or lie-flat pod availability
-- *Coming soon* Get emailed when award space opens up
-- *Coming soonish* Automatically calculate region-based miles based on published award charts
+This README is for developers working on the codebase. It describes what is implemented today, what is intentionally incomplete, and how the repo is organized.
 
-## Quickstart
+## Current Capabilities
 
-1. Load the project into VSCode and launch the Dev Container (make sure to have the Dev Container VSCode extension installed)
-2. Start a scraper with, for example: `just run-scraper aa SFO LAX 2023-12-01`
-3. If you want to run the front-end, create a `.env` file, start the scraper server `just run-server` and start the web frontend `just run-vite`
+- Expands a search into every origin/destination permutation the user selected.
+- Uses FlightRadar24 (`fr24`) first to discover which airlines serve each route.
+- Chooses compatible award scrapers from `config.json` based on airline support, alliance groups, disabled flags, and cash-only scraper rules.
+- Runs the selected scrapers through Arkalis, a CDP-based Chromium automation layer built for this project.
+- Normalizes scraper output into a shared `FlightWithFares` shape, merges duplicate flights, annotates amenities, and infers saver fares when possible.
+- Displays merged results in a React frontend with cached query results, sortable fare columns, login via Google/Firebase Auth, and a Firestore-backed "marked fares" UI.
+- Includes a worker that re-runs marked-fare searches and sends notification emails when saver availability changes.
+- Includes a separate SQLite-backed `award-alerts` backend for generic award alert scheduling, evaluation, and Discord notification delivery.
 
-## Architecture
+## Important Limitations
 
-There are three parts to Awardwiz: the frontend (in `awardwiz/`), the scrapers that run on the serverside (in `awardwiz-scrapers/`), and Arkalis (in `arkalis/`) which is the detection-sensitive scraping engine written for this project. Firebase is currently also used to store the user database, although this will be replaced soon.
+- The search model is one-way and single-date only.
+- Search results are nonstop only. Connected itineraries are explicitly filtered out by the scraper pipeline.
+- Flight discovery depends on `fr24`; if FlightRadar24 does not return an airline for a route, AwardWiz will not schedule that airline's scraper.
+- Several scrapers exist in the repo but are disabled in `config.json`, so code presence does not mean the scraper is active.
+- Scraper reliability varies by airline because anti-botting behavior changes over time.
+- Marked-fare notifications exist, but the worker is still effectively beta-only: it hardcodes a `BETA_USERS` allowlist and only reacts to saver-availability changes.
+- The SQLite award-alert backend is backend-only and CLI-managed; there is no user-facing CRUD/API surface yet.
+- Auth is required for normal frontend scraper calls unless you provide `VITE_SCRAPERS_TOKEN`.
+- The repo has unit coverage for the search-merging pipeline, and some live scraper/debug workflows still exist, but there is no maintained always-on live scraper test suite in this branch.
 
-This is a Node.js project with a strict Typescript setup (and enforced by eslint, via git commit hooks, and `just check` runs). `just` is used for common actions and `npm` is assumed for package management for Node. All these tools and other linters are pre-installed as part of the VSCode Dev Container. It's strongly recommended you use the Dev Container since everything's already installed, including XVFB and Chromium so you can visually debug scrapers. See the `.devcontainer/devcontainer.json` file for how the environment is built.
+## Enabled Scrapers
 
-The frontend is a React app that uses [Ant Design](https://github.com/ant-design/ant-design/) for UI components. It's built using [Vite](https://github.com/vitejs/vite).
+As configured in `config.json`, the currently enabled scrapers are:
 
-The backend is a Node.js server that uses [Arkalis](arkalis/README.md) to run scrapers. It has a variety of commands to help write and debug scrapers.
+- `aa`
+- `aeroplan`
+- `alaska`
+- `jetblue`
+- `skiplagged`
+- `fr24` for route discovery
 
-The `just` command is used to access a variety of scripts, including `just test` to run the tests, `just check` to build and lint your code, `just run-scraper <name> <origin> <destination> <yyyy-mm-dd>` to run a scraper, `run-vite`/`run-server` to run the front-end server plus the scrapers backend server. Note that if you're developing in VSCode, you can use the `Run scraper` Launch item and you'll have the full VSCode debugger available to you for debugging scrapers.
+Defined but currently disabled in `config.json`:
 
-## `.env`
+- `delta`
+- `southwest`
+- `united`
+- `skyscanner`
 
-A few environment variables are used to start the server and frontend. These are in a `.env` file in the root of the workspace. These are only necessary if you are running the front-end server. If you're using `just run-scraper` for example, none are needed.
+## Repo Layout
 
-**Required Variables**
-- `VITE_GOOGLE_CLIENT_ID`: A Google client ID with OAuth capabilities (used for identity of users). You can get this from your Firebase Auth instance (Authentication > Sign-in method > Google > Web SDK confirmation > Web client ID)
-- `VITE_FIREBASE_CONFIG_JSON`: Set to the config information (in JSON format with quoted attribute names) from 'Settings > Project settings > General' and scroll to the bottom and select Config for your web app. The format is: `{"apiKey": "...", "authDomain": "...", ...}`
-- `VITE_SCRAPERS_URL`: The web browser-accessible url for `awardwiz-scrapers` , example: `http://127.0.0.1:2222`
+- `awardwiz/`: React frontend, shared search pipeline, Firebase integration, workers, and static assets.
+- `awardwiz/backend/award-alerts/`: generic SQLite-backed alert backend, CLI, scheduler, evaluator, notifier, and provider adapters.
+- `awardwiz-scrapers/`: scraper server, CLI debug entry point, scraper modules, and typed airline response shapes.
+- `arkalis/`: internal Chromium/CDP automation layer used by the scrapers.
+- `test/awardwiz/`: stub-driven tests for route discovery and result merging.
+- `docs/`: implementation notes for specific parts of the system.
+- `config.json`: the runtime scraper catalog and airline rules.
 
-**Optional Variables**
-- `VITE_USE_FIREBASE_EMULATORS`: When running locally, setting this to `true` will use the default Firebase emulators. Don't forget to start them using `firebase emulators:start`.
-- `VITE_LOKI_LOGGING_URL`: The url to log scraper results to ex: `https://123456:apikey@logs-prod3.grafana.net/loki/api/v1/push`
-- `VITE_LOKI_LOGGING_UID`: Customize the loki logging user id when calling logging scraper results (defaults to `unknown`)
-- `VITE_SMTP_CONNECTION_STRING` required for sending email notifications (still in progress). This is used when using `pnpm run marked-fares-worker`. **This is a secret and should not be public**
-- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Set to the full service account JSON without line breaks from 'Settings > Project settings > Service accounts' from when you created it. If you create a new one now, note the old one will be immediately disabled. The service account is used by workers. The format is: `{"type": "service_account", "project_id": "awardwiz", "private_key_id": "...", ...}`. **This is a secret and should not be public**
-- `SERVICE_WORKER_JWT_SECRET`: A string of whatever you want that is used to identify your service account backend that won't be rate-limited on the scrapers server
+The old `awardwiz/backend/alaska-alerts/` boundary has been retired and removed. Active Alaska provider logic now lives under `awardwiz/backend/award-alerts/providers/alaska/`.
+
+## Search Pipeline
+
+The current search flow is:
+
+1. The frontend builds all origin/destination permutations from the selected airports and departure date.
+2. Each route is sent to the `fr24` scraper to discover operating airlines.
+3. The search layer maps discovered airlines to enabled scrapers from `config.json`.
+4. Matching scrapers are called through the scraper server.
+5. Results are merged by flight number or matching schedule, then normalized:
+   - best fare per scraper/cabin is kept
+   - cash-only scrapers can be converted to estimated Chase points
+   - unsupported Chase airlines are filtered out for cash-only fares
+   - amenities are filled from scraper output and `config.json`
+   - saver status is inferred from scraper output, booking classes, and partner/native-airline rules
+
+The main implementation lives in [`awardwiz/hooks/awardSearch.ts`](awardwiz/hooks/awardSearch.ts) and [`awardwiz/hooks/useAwardSearch.ts`](awardwiz/hooks/useAwardSearch.ts).
+
+## Local Development
+
+Prerequisites:
+
+- Node.js and `npm`
+- `just`
+- Chromium or Chrome available to `chrome-launcher`
+- An X server or virtual display if you want full browser debugging behavior
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Build the project:
+
+```bash
+just build
+```
+
+Run tests:
+
+```bash
+just test
+```
+
+Run the combined lint/build/test checks:
+
+```bash
+just check
+```
+
+Run one scraper locally through the CLI debug entry point:
+
+```bash
+just run-scraper aa SFO LAX 2026-07-01
+```
+
+Run the scraper HTTP server:
+
+```bash
+just run-server
+```
+
+Run the frontend:
+
+```bash
+just run-vite
+```
+
+The usual local workflow is:
+
+1. Start `just run-server`
+2. Configure `.env`
+3. Start `just run-vite`
+4. Sign in through Google/Firebase unless you are using `VITE_SCRAPERS_TOKEN`
+
+## Environment Variables
+
+### Frontend
+
+Required for the browser app:
+
+- `VITE_GOOGLE_CLIENT_ID`: Google OAuth client ID used by the login screen.
+- `VITE_FIREBASE_CONFIG_JSON`: Firebase web config JSON used by the frontend.
+- `VITE_SCRAPERS_URL`: Browser-accessible base URL of the scraper server.
+
+Optional for the browser app:
+
+- `VITE_SCRAPERS_TOKEN`: Bypass Firebase user auth for scraper calls by sending a fixed bearer token instead of a Firebase ID token.
+- `VITE_USE_FIREBASE_EMULATORS`: Set to `true` to use local Auth and Firestore emulators.
+- `VITE_REACT_QUERY_CACHE_OFF`: Set to `true` to disable persisted React Query cache in local storage.
+- `VITE_LOKI_LOGGING_URL`
+- `VITE_LOKI_LOGGING_UID`
+- `VITE_LIVE_SCRAPER_TESTS`
+
+### Workers
+
+- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators.
+- `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
+- `DATABASE_PATH`: Required for deployed `award-alerts` CLI and worker runtime, and it should point to persistent disk on the host. The `./tmp/award-alerts.sqlite` fallback is only a local-development convenience.
+- `DISCORD_WEBHOOK_URL`: Required by `awardwiz/workers/award-alerts-notifier.ts`.
+- `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/award-alerts-notifier.ts`.
+- `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/award-alerts-notifier.ts`.
+
+### Scraper Server
+
+- `PORT`: HTTP port for `awardwiz-scrapers/main-server.ts`. Defaults to `2222`.
+- `GOOGLE_PROJECT_ID`: Firebase project ID used to validate Google-signed JWTs. Defaults to `awardwiz`.
+- `CONCURRENT_REQUESTS`: Bottleneck concurrency limit for incoming scraper requests. Defaults to `5`.
+- `SERVICE_WORKER_JWT_SECRET`: Enables HS256 service-worker auth as an alternative to Google-signed user tokens.
+- `TMP_PATH`: Optional base directory for shared browser cache and Arkalis result cache.
+
+### Arkalis / Scraper Runtime
+
+- `CHROME_PATH`: Needed if `chrome-launcher` cannot discover Chromium automatically.
+- `PROXY_ADDRESS_DEFAULT`: Default proxy list for Arkalis.
+- `PROXY_ADDRESS_<SCRAPER_NAME>`: Per-scraper proxy override, for example `PROXY_ADDRESS_ALASKA`.
+- `PROXY_TZ_DEFAULT`: Default timezone override to pair with a proxy.
+- `PROXY_TZ_<SCRAPER_NAME>`: Per-scraper timezone override, for example `PROXY_TZ_ALASKA`.
+
+## Notification Backends
+
+The marked-fares flow is implemented, but it is not a general-purpose finished feature yet:
+
+- The frontend lets users mark a fare from the results table.
+- Marked fares are stored in Firestore.
+- The worker re-runs searches and compares current saver availability against the saved state.
+- Emails are only sent when saver availability changes.
+- The worker currently filters to a hardcoded beta-user allowlist.
+
+The newer `award-alerts` backend is separate from marked fares:
+
+- It lives under `awardwiz/backend/award-alerts/` and `awardwiz/workers/award-alerts-*.ts`.
+- It uses one SQLite database file for alert definitions, state, run history, and notification events.
+- Alert management is CLI-only today:
+  - `just award-alerts-cli list`
+  - `just award-alerts-cli create --program alaska --user-id user-1 --origin SFO --destination HNL --date 2026-07-01 --cabin business`
+  - `just award-alerts-cli show <alert-id>`
+- New alerts default to `poll_interval_minutes=1` and `min_notification_interval_minutes=10` unless explicitly overridden at creation time.
+- The evaluator worker claims due alerts from SQLite, runs provider-specific search/match logic, and enqueues pending Discord notification events.
+- The notifier worker claims pending notification events from SQLite and posts them to one shared Discord webhook.
+- Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
+- Persistent server execution is the intended production model for this service. Set `DATABASE_PATH` to a persistent host path for that runtime; the default `./tmp/award-alerts.sqlite` fallback is for local development only. GitHub Actions is no longer the intended runtime for evaluator/notifier loops. See [docs/award-alerts-operations.md](docs/award-alerts-operations.md) for the canonical `systemd` deployment model.
+- Alaska is the first provider, but the runtime surface is generic under `award-alerts`.
+
+## Arkalis Summary
+
+Arkalis is an internal scraping layer, not a standalone published package in this repo. It:
+
+- launches Chromium via `chrome-launcher`
+- talks to the browser over CDP directly
+- randomizes browser window size and position
+- supports per-scraper request blocking
+- supports proxy authentication and simple proxy-session rotation
+- offers URL/HTML/selector waiting helpers
+- simulates human-like mouse movement for clicks
+- can persist result-cache entries to disk
+
+See [docs/arkalis.md](docs/arkalis.md) and [arkalis/README.md](arkalis/README.md).
+
+## Additional Docs
+
+- [docs/alaska.md](docs/alaska.md): Alaska scraper behavior and normalization rules.
+- [docs/award-alerts-backend-handoff.md](docs/award-alerts-backend-handoff.md): backend alert-service takeover notes, architecture, operational model, and current limits.
+- [docs/award-alerts-operations.md](docs/award-alerts-operations.md): canonical persistent-server `systemd` runbook for the SQLite + Discord backend.
+- [docs/arkalis.md](docs/arkalis.md): internal Arkalis architecture notes.
+- [arkalis/README.md](arkalis/README.md): concise developer-facing Arkalis overview.

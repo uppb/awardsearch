@@ -46,6 +46,7 @@ const standardizeResults = (raw: AeroplanResponse, origOrigin: string, origDesti
       flightNo: `${flightLookup.marketingAirlineCode} ${flightLookup.marketingFlightNumber}`,
       duration: flightLookup.duration / 60,
       aircraft: raw.dictionaries.aircraft[flightLookup.aircraftCode],
+      segmentCount: group.boundDetails.segments.length,
       fares: [],
       amenities: {
         hasPods: undefined,

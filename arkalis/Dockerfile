@@ -23,5 +23,6 @@ RUN for _ in 1 2 3; do fetch --nohooks --no-history chromium && break; done \
   && gclient runhooks
 
 RUN cd src \
-  && gn gen out/Default --args='is_debug=false symbol_level=2 target_os="linux" target_cpu="x64"' \
+  && if [ "$TARGETARCH" = "arm64" ]; then TARGET_CPU="arm64"; else TARGET_CPU="x64"; fi \
+  && gn gen out/Default --args="is_debug=false symbol_level=2 target_os=\"linux\" target_cpu=\"$TARGET_CPU\"" \
   && autoninja -C out/Default chrome
