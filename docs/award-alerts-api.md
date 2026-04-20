@@ -218,8 +218,36 @@ Response shape:
 {
   "hasMatch": true,
   "matchedDates": ["2026-05-02", "2026-05-03"],
-  "matchingResults": [],
-  "bestMatchSummary": null,
+  "matchingResults": [
+    {
+      "date": "2026-05-02",
+      "flightNo": "JL 82",
+      "origin": "SHA",
+      "destination": "HND",
+      "departureDateTime": "2026-05-02 12:45:00",
+      "arrivalDateTime": "2026-05-02 16:50:00",
+      "cabin": "business",
+      "miles": 32500,
+      "cash": 25.7,
+      "currencyOfCash": "USD",
+      "bookingClass": "U",
+      "segmentCount": 1
+    }
+  ],
+  "bestMatchSummary": {
+    "date": "2026-05-02",
+    "flightNo": "JL 82",
+    "origin": "SHA",
+    "destination": "HND",
+    "departureDateTime": "2026-05-02 12:45:00",
+    "arrivalDateTime": "2026-05-02 16:50:00",
+    "cabin": "business",
+    "miles": 32500,
+    "cash": 25.7,
+    "currencyOfCash": "USD",
+    "bookingClass": "U",
+    "segmentCount": 1
+  },
   "matchFingerprint": "fp-1",
   "bookingUrl": "https://..."
 }
