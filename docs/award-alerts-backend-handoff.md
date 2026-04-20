@@ -92,7 +92,7 @@ Routes:
 - `GET /api/award-alerts/:id/notifications`
 
 The API is JSON-only and returns stable error objects shaped like `{ error: { code, message } }`.
-Write endpoints require a JSON object body; malformed JSON normalizes to `bad_request`, and scalar/array/missing bodies are rejected with a stable `bad_request` message before service code runs.
+Write endpoints require a non-empty JSON object body; malformed JSON normalizes to `bad_request`, and scalar/array/empty/missing bodies are rejected with a stable `bad_request` message before service code runs.
 
 ### Alaska provider-specific logic
 

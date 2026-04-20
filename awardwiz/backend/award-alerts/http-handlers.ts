@@ -84,8 +84,10 @@ const getAlertId = (req: Request) => {
 
 const getJsonObjectBody = <T>(req: Request): T => {
   const body = req.body
-  if (!body || typeof body !== "object" || Array.isArray(body))
+  if (body == null || typeof body !== "object" || Array.isArray(body))
     throw new Error("request body must be a JSON object")
+  if (Object.keys(body).length === 0)
+    throw new Error("request body must be a non-empty JSON object")
   return body as T
 }
 

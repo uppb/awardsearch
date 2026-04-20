@@ -355,4 +355,67 @@ describe("award alerts HTTP API", () => {
       },
     })
   })
+
+  it("rejects empty write bodies before calling the service", async () => {
+    const service = {
+      listAlerts: vi.fn(async () => []),
+      getAlert: vi.fn(async () => alert),
+      createAlert: vi.fn(async () => alert),
+      updateAlert: vi.fn(async () => updatedAlert),
+      pauseAlert: vi.fn(async () => ({ ...alert, active: false })),
+      resumeAlert: vi.fn(async () => ({ ...alert, active: true })),
+      deleteAlert: vi.fn(async () => alert),
+      previewAlert: vi.fn(async () => preview),
+      getAlertRuns: vi.fn(async () => [{ id: "run-1" }]),
+      getAlertNotifications: vi.fn(async () => [{ id: "event-1" }]),
+      getStatus: vi.fn(() => status),
+      triggerEvaluatorRun: vi.fn(async () => ({ started: true })),
+      triggerNotifierRun: vi.fn(async () => ({ started: true })),
+    }
+
+    const started = startServer(service)
+    server = started.server
+
+    let response = await fetch(`${started.baseUrl()}/api/award-alerts`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: {
+        code: "bad_request",
+        message: "request body must be a non-empty JSON object",
+      },
+    })
+
+    response = await fetch(`${started.baseUrl()}/api/award-alerts/alert-1`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: {
+        code: "bad_request",
+        message: "request body must be a non-empty JSON object",
+      },
+    })
+
+    response = await fetch(`${started.baseUrl()}/api/award-alerts/operations/preview`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: {
+        code: "bad_request",
+        message: "request body must be a non-empty JSON object",
+      },
+    })
+
+    expect(service.createAlert).not.toHaveBeenCalled()
+    expect(service.updateAlert).not.toHaveBeenCalled()
+    expect(service.previewAlert).not.toHaveBeenCalled()
+  })
 })
