@@ -1,4 +1,4 @@
-export type AwardProgram = "alaska"
+export type AwardProgram = string
 export type AwardAlertDateMode = "single_date" | "date_range"
 export type AwardAlertCabin = "economy" | "business" | "first"
 
