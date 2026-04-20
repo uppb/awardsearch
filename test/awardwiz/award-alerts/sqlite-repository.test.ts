@@ -261,6 +261,24 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
+  it("does not ignore unrelated notification event constraint failures", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+
+      expect(() => repo.createNotificationEvent({
+        ...buildEvent(),
+        id: "event-invalid-status",
+        status: "invalid-status" as never,
+      })).toThrow("CHECK constraint failed")
+
+      expect(db.prepare("SELECT COUNT(*) AS count FROM notification_events").get()).toEqual({ count: 0 })
+    } finally {
+      db.close()
+    }
+  })
+
   it("finalizes stale attempted processing events instead of reclaiming them", async () => {
     const { db, repo } = openRepository()
 
@@ -327,10 +345,14 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
-  it("uses immediate transactions for both claim paths", async () => {
+  it("uses immediate transactions for claim and notification transition paths", async () => {
     let immediateCalls = 0
     let deferredCalls = 0
-    const fakeDb = {
+    const createFakeDb = (current?: {
+      status: NotificationEvent["status"]
+      claim_token: string | null
+      attempted_at: string | null
+    }) => ({
       transaction<T extends (...args: any[]) => unknown>(fn: T) {
         const wrapped = (...args: Parameters<T>) => {
           deferredCalls += 1
@@ -348,20 +370,39 @@ describe("SqliteAwardAlertsRepository", () => {
         wrapped.exclusive = (...args: Parameters<T>) => fn(...args)
         return wrapped
       },
-      prepare() {
+      prepare(sql: string) {
         return {
           all: () => [],
-          get: () => undefined,
+          get: () => sql.includes("SELECT status, claim_token, attempted_at FROM notification_events") ? current : undefined,
           run: () => ({ changes: 1 }),
         }
       },
-    }
-    const repo = new SqliteAwardAlertsRepository(fakeDb as any)
+    })
 
-    repo.claimDueAlerts("2026-04-19T00:00:00.000Z", 10, 5)
-    repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
+    new SqliteAwardAlertsRepository(createFakeDb() as any).claimDueAlerts("2026-04-19T00:00:00.000Z", 10, 5)
+    new SqliteAwardAlertsRepository(createFakeDb() as any).claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
+    new SqliteAwardAlertsRepository(createFakeDb({
+      status: "processing",
+      claim_token: "claim-1",
+      attempted_at: null,
+    }) as any).markNotificationAttempting("event-1", "2026-04-19T01:01:00.000Z", "claim-1")
+    new SqliteAwardAlertsRepository(createFakeDb({
+      status: "processing",
+      claim_token: "claim-1",
+      attempted_at: "2026-04-19T01:01:00.000Z",
+    }) as any).markNotificationDeliveredUnconfirmed("event-1", "At-most-once: ambiguous delivery")
+    new SqliteAwardAlertsRepository(createFakeDb({
+      status: "processing",
+      claim_token: "claim-1",
+      attempted_at: "2026-04-19T01:01:00.000Z",
+    }) as any).markNotificationSent("event-1", "2026-04-19T01:02:00.000Z")
+    new SqliteAwardAlertsRepository(createFakeDb({
+      status: "processing",
+      claim_token: "claim-1",
+      attempted_at: "2026-04-19T01:01:00.000Z",
+    }) as any).markNotificationFailed("event-1", "Discord webhook request failed with status 400")
 
-    expect(immediateCalls).toBe(2)
+    expect(immediateCalls).toBe(6)
     expect(deferredCalls).toBe(0)
   })
 

@@ -149,11 +149,20 @@ const assertRowUpdated = (changes: number, entity: string) => {
     throw new Error(`${entity} not found`)
 }
 
-const assertClaimStillActive = (current: {
+const assertClaimTransitionUpdated = (changes: number) => {
+  if (changes === 0)
+    throw new Error("stale claim token")
+}
+
+function assertClaimStillActive(current: {
   status: NotificationEventStatus
   claim_token: string | null
   attempted_at: string | null
-} | undefined) => {
+} | undefined): asserts current is {
+  status: NotificationEventStatus
+  claim_token: string
+  attempted_at: string
+} {
   if (current === undefined)
     throw new Error("notification event not found")
 
@@ -280,11 +289,12 @@ export class SqliteAwardAlertsRepository {
 
   createNotificationEvent(event: NotificationEvent) {
     this.db.prepare(`
-      INSERT OR IGNORE INTO notification_events (
+      INSERT INTO notification_events (
         id, alert_id, user_id, created_at, status, claimed_at, claim_token, attempted_at, payload, sent_at, failure_reason
       ) VALUES (
         @id, @alert_id, @user_id, @created_at, @status, @claimed_at, @claim_token, @attempted_at, @payload, @sent_at, @failure_reason
       )
+      ON CONFLICT(id) DO NOTHING
     `).run({
       id: event.id,
       alert_id: event.alertId,
@@ -412,11 +422,17 @@ export class SqliteAwardAlertsRepository {
         throw new Error("stale claim token")
       }
 
-      assertRowUpdated(
-        this.db.prepare("UPDATE notification_events SET attempted_at = ? WHERE id = ?").run(attemptedAt, id).changes,
-        "notification event",
+      assertClaimTransitionUpdated(
+        this.db.prepare(`
+          UPDATE notification_events
+          SET attempted_at = ?
+          WHERE id = ?
+            AND status = 'processing'
+            AND claim_token = ?
+            AND attempted_at IS NULL
+        `).run(attemptedAt, id, current.claim_token).changes,
       )
-    })()
+    }).immediate()
   }
 
   markNotificationDeliveredUnconfirmed(id: string, reason: string) {
@@ -428,7 +444,7 @@ export class SqliteAwardAlertsRepository {
       } | undefined
       assertClaimStillActive(current)
 
-      assertRowUpdated(
+      assertClaimTransitionUpdated(
         this.db.prepare(`
           UPDATE notification_events
           SET status = 'delivered_unconfirmed',
@@ -438,10 +454,12 @@ export class SqliteAwardAlertsRepository {
               attempted_at = NULL,
               failure_reason = ?
           WHERE id = ?
-        `).run(reason, id).changes,
-        "notification event",
+            AND status = 'processing'
+            AND claim_token = ?
+            AND attempted_at IS NOT NULL
+        `).run(reason, id, current.claim_token).changes,
       )
-    })()
+    }).immediate()
   }
 
   markNotificationSent(id: string, sentAt: string) {
@@ -453,7 +471,7 @@ export class SqliteAwardAlertsRepository {
       } | undefined
       assertClaimStillActive(current)
 
-      assertRowUpdated(
+      assertClaimTransitionUpdated(
         this.db.prepare(`
           UPDATE notification_events
           SET status = 'sent',
@@ -463,10 +481,12 @@ export class SqliteAwardAlertsRepository {
               attempted_at = NULL,
               failure_reason = NULL
           WHERE id = ?
-        `).run(sentAt, id).changes,
-        "notification event",
+            AND status = 'processing'
+            AND claim_token = ?
+            AND attempted_at IS NOT NULL
+        `).run(sentAt, id, current.claim_token).changes,
       )
-    })()
+    }).immediate()
   }
 
   markNotificationFailed(id: string, reason: string) {
@@ -478,7 +498,7 @@ export class SqliteAwardAlertsRepository {
       } | undefined
       assertClaimStillActive(current)
 
-      assertRowUpdated(
+      assertClaimTransitionUpdated(
         this.db.prepare(`
           UPDATE notification_events
           SET status = 'failed',
@@ -487,9 +507,11 @@ export class SqliteAwardAlertsRepository {
               attempted_at = NULL,
               failure_reason = ?
           WHERE id = ?
-        `).run(reason, id).changes,
-        "notification event",
+            AND status = 'processing'
+            AND claim_token = ?
+            AND attempted_at IS NOT NULL
+        `).run(reason, id, current.claim_token).changes,
       )
-    })()
+    }).immediate()
   }
 }
