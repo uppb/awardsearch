@@ -235,6 +235,30 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
+  it("rejects saveEvaluation writes when alert, state, and run ids do not match without partial persistence", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+
+      expect(() => repo.saveEvaluation({
+        alert: buildAlert(),
+        state: buildState({ alertId: "alert-2" }),
+        run: buildRun({ alertId: "alert-3" }),
+      })).toThrow("saveEvaluation requires alert.id, state.alertId, and run.alertId to match")
+
+      expect(repo.getState("alert-1")).toBeUndefined()
+      expect(db.prepare("SELECT COUNT(*) AS count FROM award_alert_runs").get()).toEqual({ count: 0 })
+      expect(db.prepare("SELECT last_checked_at, next_check_at, updated_at FROM award_alerts WHERE id = ?").get("alert-1")).toEqual({
+        last_checked_at: null,
+        next_check_at: "2026-04-19T00:00:00.000Z",
+        updated_at: "2026-04-19T00:00:00.000Z",
+      })
+    } finally {
+      db.close()
+    }
+  })
+
   it("does not overwrite an existing notification event on retry", async () => {
     const { db, repo } = openRepository()
 
@@ -390,17 +414,17 @@ describe("SqliteAwardAlertsRepository", () => {
       status: "processing",
       claim_token: "claim-1",
       attempted_at: "2026-04-19T01:01:00.000Z",
-    }) as any).markNotificationDeliveredUnconfirmed("event-1", "At-most-once: ambiguous delivery")
+    }) as any).markNotificationDeliveredUnconfirmed("event-1", "At-most-once: ambiguous delivery", "claim-1")
     new SqliteAwardAlertsRepository(createFakeDb({
       status: "processing",
       claim_token: "claim-1",
       attempted_at: "2026-04-19T01:01:00.000Z",
-    }) as any).markNotificationSent("event-1", "2026-04-19T01:02:00.000Z")
+    }) as any).markNotificationSent("event-1", "2026-04-19T01:02:00.000Z", "claim-1")
     new SqliteAwardAlertsRepository(createFakeDb({
       status: "processing",
       claim_token: "claim-1",
       attempted_at: "2026-04-19T01:01:00.000Z",
-    }) as any).markNotificationFailed("event-1", "Discord webhook request failed with status 400")
+    }) as any).markNotificationFailed("event-1", "Discord webhook request failed with status 400", "claim-1")
 
     expect(immediateCalls).toBe(6)
     expect(deferredCalls).toBe(0)
@@ -429,7 +453,13 @@ describe("SqliteAwardAlertsRepository", () => {
         attempted_at: "2026-04-19T01:01:00.000Z",
       })
 
-      repo.markNotificationDeliveredUnconfirmed("event-processing", "At-most-once: ambiguous delivery")
+      expect(() => repo.markNotificationDeliveredUnconfirmed(
+        "event-processing",
+        "At-most-once: ambiguous delivery",
+        "wrong-token",
+      )).toThrow("stale claim token")
+
+      repo.markNotificationDeliveredUnconfirmed("event-processing", "At-most-once: ambiguous delivery", "claim-1")
       expect(db.prepare("SELECT status, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-processing")).toEqual({
         status: "delivered_unconfirmed",
         claimed_at: null,
@@ -445,7 +475,8 @@ describe("SqliteAwardAlertsRepository", () => {
         claimToken: "claim-2",
       }))
       repo.markNotificationAttempting("event-sent", "2026-04-19T01:01:30.000Z", "claim-2")
-      repo.markNotificationSent("event-sent", "2026-04-19T01:02:00.000Z")
+      expect(() => repo.markNotificationSent("event-sent", "2026-04-19T01:02:00.000Z", "wrong-token")).toThrow("stale claim token")
+      repo.markNotificationSent("event-sent", "2026-04-19T01:02:00.000Z", "claim-2")
       expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-sent")).toEqual({
         status: "sent",
         sent_at: "2026-04-19T01:02:00.000Z",
@@ -462,7 +493,8 @@ describe("SqliteAwardAlertsRepository", () => {
         claimToken: "claim-3",
       }))
       repo.markNotificationAttempting("event-failed", "2026-04-19T01:01:30.000Z", "claim-3")
-      repo.markNotificationFailed("event-failed", "Discord webhook request failed with status 400")
+      expect(() => repo.markNotificationFailed("event-failed", "Discord webhook request failed with status 400", "wrong-token")).toThrow("stale claim token")
+      repo.markNotificationFailed("event-failed", "Discord webhook request failed with status 400", "claim-3")
       expect(db.prepare("SELECT status, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-failed")).toEqual({
         status: "failed",
         claimed_at: null,
@@ -490,7 +522,7 @@ describe("SqliteAwardAlertsRepository", () => {
       repo.markNotificationAttempting("event-stale-sent", "2026-04-19T00:31:00.000Z", "claim-stale")
       repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
 
-      expect(() => repo.markNotificationSent("event-stale-sent", "2026-04-19T01:05:00.000Z")).toThrow("stale claim token")
+      expect(() => repo.markNotificationSent("event-stale-sent", "2026-04-19T01:05:00.000Z", "claim-stale")).toThrow("stale claim token")
       expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-stale-sent")).toEqual({
         status: "delivered_unconfirmed",
         sent_at: null,
@@ -519,7 +551,7 @@ describe("SqliteAwardAlertsRepository", () => {
       repo.markNotificationAttempting("event-stale-failed", "2026-04-19T00:31:00.000Z", "claim-stale")
       repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
 
-      expect(() => repo.markNotificationFailed("event-stale-failed", "Discord webhook request failed with status 400")).toThrow("stale claim token")
+      expect(() => repo.markNotificationFailed("event-stale-failed", "Discord webhook request failed with status 400", "claim-stale")).toThrow("stale claim token")
       expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-stale-failed")).toEqual({
         status: "delivered_unconfirmed",
         sent_at: null,
@@ -551,6 +583,7 @@ describe("SqliteAwardAlertsRepository", () => {
       expect(() => repo.markNotificationDeliveredUnconfirmed(
         "event-stale-delivered-unconfirmed",
         "At-most-once: later caller should not overwrite finalized stale attempt",
+        "claim-stale",
       )).toThrow("stale claim token")
       expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-stale-delivered-unconfirmed")).toEqual({
         status: "delivered_unconfirmed",

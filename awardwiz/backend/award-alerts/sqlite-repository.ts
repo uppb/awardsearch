@@ -158,7 +158,7 @@ function assertClaimStillActive(current: {
   status: NotificationEventStatus
   claim_token: string | null
   attempted_at: string | null
-} | undefined): asserts current is {
+} | undefined, claimToken: string | undefined): asserts current is {
   status: NotificationEventStatus
   claim_token: string
   attempted_at: string
@@ -168,6 +168,7 @@ function assertClaimStillActive(current: {
 
   if (
     current.status !== "processing"
+    || current.claim_token !== (claimToken ?? null)
     || current.claim_token === null
     || current.attempted_at === null
   ) {
@@ -219,6 +220,11 @@ export class SqliteAwardAlertsRepository {
   }
 
   saveEvaluation({ alert, state, run }: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) {
+    invariant(
+      alert.id === state.alertId && state.alertId === run.alertId,
+      "saveEvaluation requires alert.id, state.alertId, and run.alertId to match",
+    )
+
     const nextCheckAt = dayjs(state.updatedAt).add(alert.pollIntervalMinutes, "minute").toISOString()
 
     this.db.transaction(() => {
@@ -435,14 +441,14 @@ export class SqliteAwardAlertsRepository {
     }).immediate()
   }
 
-  markNotificationDeliveredUnconfirmed(id: string, reason: string) {
+  markNotificationDeliveredUnconfirmed(id: string, reason: string, claimToken?: string) {
     this.db.transaction(() => {
       const current = this.db.prepare("SELECT status, claim_token, attempted_at FROM notification_events WHERE id = ?").get(id) as {
         status: NotificationEventStatus
         claim_token: string | null
         attempted_at: string | null
       } | undefined
-      assertClaimStillActive(current)
+      assertClaimStillActive(current, claimToken)
 
       assertClaimTransitionUpdated(
         this.db.prepare(`
@@ -462,14 +468,14 @@ export class SqliteAwardAlertsRepository {
     }).immediate()
   }
 
-  markNotificationSent(id: string, sentAt: string) {
+  markNotificationSent(id: string, sentAt: string, claimToken?: string) {
     this.db.transaction(() => {
       const current = this.db.prepare("SELECT status, claim_token, attempted_at FROM notification_events WHERE id = ?").get(id) as {
         status: NotificationEventStatus
         claim_token: string | null
         attempted_at: string | null
       } | undefined
-      assertClaimStillActive(current)
+      assertClaimStillActive(current, claimToken)
 
       assertClaimTransitionUpdated(
         this.db.prepare(`
@@ -489,14 +495,14 @@ export class SqliteAwardAlertsRepository {
     }).immediate()
   }
 
-  markNotificationFailed(id: string, reason: string) {
+  markNotificationFailed(id: string, reason: string, claimToken?: string) {
     this.db.transaction(() => {
       const current = this.db.prepare("SELECT status, claim_token, attempted_at FROM notification_events WHERE id = ?").get(id) as {
         status: NotificationEventStatus
         claim_token: string | null
         attempted_at: string | null
       } | undefined
-      assertClaimStillActive(current)
+      assertClaimStillActive(current, claimToken)
 
       assertClaimTransitionUpdated(
         this.db.prepare(`
