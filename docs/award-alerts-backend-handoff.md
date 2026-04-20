@@ -33,6 +33,7 @@ Compared with the older in-progress alert work, the major changes are:
 9. Alert input validation now lives in a shared helper module used by the CLI and future API-facing entrypoints, including date/default handling and core domain validation for cabins, intervals, and rule limits.
 10. `userId` is optional in alert input handling, and the SQLite v2 schema/migration now stores `user_id` as nullable for both alerts and notification events.
 11. Legacy v1 SQLite databases still open and migrate to v2 on startup before the nullable schema takes effect.
+12. The repository surface now supports in-place alert updates plus alert-scoped run and notification history inspection.
 
 ## Current Ownership Boundaries
 
@@ -57,6 +58,7 @@ What they own:
 - alert date expansion
 - due-alert claiming
 - evaluation state and run history persistence
+- repository-backed alert updates and history reads
 - notification event queueing
 - Discord delivery
 - CLI administration

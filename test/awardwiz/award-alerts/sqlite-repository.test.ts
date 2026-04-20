@@ -177,6 +177,41 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
+  it("updates an alert in place and reads the updated row back", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert({ userId: undefined }))
+
+      repo.updateAlert(buildAlert({
+        id: "alert-1",
+        userId: undefined,
+        destination: "NRT",
+        maxMiles: 35000,
+        nextCheckAt: "2026-04-20T00:05:00.000Z",
+        updatedAt: "2026-04-20T00:05:00.000Z",
+      }))
+
+      expect(repo.getAlert("alert-1")).toEqual(buildAlert({
+        userId: undefined,
+        destination: "NRT",
+        maxMiles: 35000,
+        nextCheckAt: "2026-04-20T00:05:00.000Z",
+        updatedAt: "2026-04-20T00:05:00.000Z",
+      }))
+      expect(db.prepare("SELECT user_id, destination, max_miles, next_check_at, created_at, updated_at FROM award_alerts WHERE id = ?").get("alert-1")).toEqual({
+        user_id: null,
+        destination: "NRT",
+        max_miles: 35000,
+        next_check_at: "2026-04-20T00:05:00.000Z",
+        created_at: "2026-04-19T00:00:00.000Z",
+        updated_at: "2026-04-20T00:05:00.000Z",
+      })
+    } finally {
+      db.close()
+    }
+  })
+
   it("rejects duplicate run ids without mutating prior run history or alert state", async () => {
     const { db, repo } = openRepository()
 
@@ -259,6 +294,49 @@ describe("SqliteAwardAlertsRepository", () => {
     }
   })
 
+  it("lists alert run history in reverse chronological order for one alert", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+
+      repo.saveEvaluation({
+        alert: buildAlert(),
+        state: buildState({
+          updatedAt: "2026-04-19T00:05:00.000Z",
+        }),
+        run: buildRun({
+          id: "run-1",
+          startedAt: "2026-04-19T00:05:00.000Z",
+          completedAt: "2026-04-19T00:05:10.000Z",
+        }),
+      })
+
+      repo.saveEvaluation({
+        alert: buildAlert(),
+        state: buildState({
+          updatedAt: "2026-04-19T00:10:00.000Z",
+        }),
+        run: buildRun({
+          id: "run-2",
+          startedAt: "2026-04-19T00:10:00.000Z",
+          completedAt: "2026-04-19T00:10:10.000Z",
+        }),
+      })
+
+      expect(repo.listAlertRuns("alert-1").map((run) => run.id)).toEqual(["run-2", "run-1"])
+      expect(repo.listAlertRuns("alert-1")[0]).toMatchObject({
+        id: "run-2",
+        alertId: "alert-1",
+        startedAt: "2026-04-19T00:10:00.000Z",
+        completedAt: "2026-04-19T00:10:10.000Z",
+      })
+      expect(repo.listAlertRuns("missing-alert")).toEqual([])
+    } finally {
+      db.close()
+    }
+  })
+
   it("does not overwrite an existing notification event on retry", async () => {
     const { db, repo } = openRepository()
 
@@ -298,6 +376,43 @@ describe("SqliteAwardAlertsRepository", () => {
       })).toThrow("CHECK constraint failed")
 
       expect(db.prepare("SELECT COUNT(*) AS count FROM notification_events").get()).toEqual({ count: 0 })
+    } finally {
+      db.close()
+    }
+  })
+
+  it("lists notification history in reverse chronological order for one alert", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+      await repo.insertAlert(buildAlert({
+        id: "alert-2",
+        origin: "SEA",
+        destination: "HND",
+      }))
+
+      repo.createNotificationEvent(buildEvent({
+        id: "event-1",
+        createdAt: "2026-04-19T00:00:00.000Z",
+      }))
+      repo.createNotificationEvent(buildEvent({
+        id: "event-2",
+        createdAt: "2026-04-19T00:05:00.000Z",
+      }))
+      repo.createNotificationEvent(buildEvent({
+        id: "event-3",
+        alertId: "alert-2",
+        createdAt: "2026-04-19T00:10:00.000Z",
+      }))
+
+      expect(repo.listNotificationEvents("alert-1").map((event) => event.id)).toEqual(["event-2", "event-1"])
+      expect(repo.listNotificationEvents("alert-1")[0]).toMatchObject({
+        id: "event-2",
+        alertId: "alert-1",
+        createdAt: "2026-04-19T00:05:00.000Z",
+      })
+      expect(repo.listNotificationEvents("missing-alert")).toEqual([])
     } finally {
       db.close()
     }

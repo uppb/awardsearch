@@ -49,6 +49,20 @@ type AwardAlertStateRow = {
   updated_at: string
 }
 
+type AwardAlertRunRow = {
+  id: string
+  alert_id: string
+  started_at: string
+  completed_at: string | null
+  searched_dates: string | null
+  scrape_count: number
+  scrape_success_count: number
+  scrape_error_count: number
+  matched_result_count: number
+  has_match: number
+  error_summary: string | null
+}
+
 type NotificationEventRow = {
   id: string
   alert_id: string
@@ -130,6 +144,23 @@ const mapStateRow = (row: AwardAlertStateRow): AwardAlertState => ({
   updatedAt: row.updated_at,
 })
 
+const mapRunRow = (row: AwardAlertRunRow): AwardAlertRun => ({
+  id: row.id,
+  alertId: row.alert_id,
+  startedAt: row.started_at,
+  completedAt: (() => {
+    invariant(row.completed_at !== null, `award alert run ${row.id} is missing completed_at`)
+    return row.completed_at
+  })(),
+  searchedDates: row.searched_dates === null ? [] : parseJson<string[]>(row.searched_dates),
+  scrapeCount: row.scrape_count,
+  scrapeSuccessCount: row.scrape_success_count,
+  scrapeErrorCount: row.scrape_error_count,
+  matchedResultCount: row.matched_result_count,
+  hasMatch: fromDbBoolean(row.has_match),
+  errorSummary: row.error_summary ?? undefined,
+})
+
 const mapNotificationEventRow = (row: NotificationEventRow): NotificationEvent => ({
   id: row.id,
   alertId: row.alert_id,
@@ -192,6 +223,49 @@ export class SqliteAwardAlertsRepository {
     return row === undefined ? undefined : mapAlertRow(row)
   }
 
+  updateAlert(alert: AwardAlert) {
+    const result = this.db.prepare(`
+      UPDATE award_alerts
+      SET user_id = @user_id,
+          origin = @origin,
+          destination = @destination,
+          date_mode = @date_mode,
+          date = @date,
+          start_date = @start_date,
+          end_date = @end_date,
+          cabin = @cabin,
+          nonstop_only = @nonstop_only,
+          max_miles = @max_miles,
+          max_cash = @max_cash,
+          active = @active,
+          poll_interval_minutes = @poll_interval_minutes,
+          min_notification_interval_minutes = @min_notification_interval_minutes,
+          next_check_at = @next_check_at,
+          updated_at = @updated_at
+      WHERE id = @id
+    `).run({
+      id: alert.id,
+      user_id: alert.userId ?? null,
+      origin: alert.origin,
+      destination: alert.destination,
+      date_mode: alert.dateMode,
+      date: alert.dateMode === "single_date" ? alert.date : null,
+      start_date: alert.dateMode === "date_range" ? alert.startDate : null,
+      end_date: alert.dateMode === "date_range" ? alert.endDate : null,
+      cabin: alert.cabin,
+      nonstop_only: toDbBoolean(alert.nonstopOnly),
+      max_miles: alert.maxMiles ?? null,
+      max_cash: alert.maxCash ?? null,
+      active: toDbBoolean(alert.active),
+      poll_interval_minutes: alert.pollIntervalMinutes,
+      min_notification_interval_minutes: alert.minNotificationIntervalMinutes,
+      next_check_at: alert.nextCheckAt ?? null,
+      updated_at: alert.updatedAt,
+    })
+
+    assertRowUpdated(result.changes, "award alert")
+  }
+
   insertAlert(alert: AwardAlert) {
     this.db.prepare(`
       INSERT INTO award_alerts (
@@ -225,6 +299,24 @@ export class SqliteAwardAlertsRepository {
       created_at: alert.createdAt,
       updated_at: alert.updatedAt,
     })
+  }
+
+  listAlertRuns(alertId: string): AwardAlertRun[] {
+    return (this.db.prepare(`
+      SELECT *
+      FROM award_alert_runs
+      WHERE alert_id = ?
+      ORDER BY started_at DESC, id DESC
+    `).all(alertId) as AwardAlertRunRow[]).map(mapRunRow)
+  }
+
+  listNotificationEvents(alertId: string): NotificationEvent[] {
+    return (this.db.prepare(`
+      SELECT *
+      FROM notification_events
+      WHERE alert_id = ?
+      ORDER BY created_at DESC, id DESC
+    `).all(alertId) as NotificationEventRow[]).map(mapNotificationEventRow)
   }
 
   getState(alertId: string): AwardAlertState | undefined {

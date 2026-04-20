@@ -106,6 +106,10 @@ export type AwardAlertProvider = {
 export type AwardAlertProviders = Partial<Record<AwardProgram, AwardAlertProvider>>
 
 export type AwardAlertsRepository = {
+  getAlert: (id: string) => AwardAlert | undefined
+  updateAlert: (alert: AwardAlert) => void
+  listAlertRuns: (alertId: string) => AwardAlertRun[]
+  listNotificationEvents: (alertId: string) => NotificationEvent[]
   getState: (alertId: string) => AwardAlertState | undefined
   saveEvaluation: (evaluation: { alert: AwardAlert, state: AwardAlertState, run: AwardAlertRun }) => void
   createNotificationEvent: (event: NotificationEvent) => void
