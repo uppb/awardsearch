@@ -1,5 +1,8 @@
 import { promisify } from "util"
+import { access, readdir } from "node:fs/promises"
+import { constants as fsConstants } from "node:fs"
 import { exec as execNoPromise } from "node:child_process"
+import { delimiter, join } from "node:path"
 import url from "node:url"
 import * as chromeLauncherModule from "chrome-launcher"
 import { Arkalis, ArkalisCore } from "./arkalis.js"
@@ -19,6 +22,106 @@ export const resolveChromeLaunch = (chromeLauncher: ChromeLauncherApi) => {
   if (!launch)
     throw new Error("chrome-launcher module does not expose launch()")
   return launch
+}
+
+const chromeExecutableNames = [
+  "google-chrome",
+  "google-chrome-stable",
+  "chromium",
+  "chromium-browser",
+] as const
+
+type AccessFn = (path: string, mode?: number) => Promise<void>
+type ChromePathDirent = {
+  name: string
+  isDirectory: () => boolean
+  isFile: () => boolean
+}
+type ReaddirFn = (path: string, options: { withFileTypes: true }) => Promise<ChromePathDirent[]>
+
+type ChromePathResolverDeps = {
+  env?: NodeJS.ProcessEnv
+  access?: AccessFn
+  readdir?: ReaddirFn
+}
+
+const canAccess = async (targetPath: string, accessFn: AccessFn) => {
+  try {
+    await accessFn(targetPath, fsConstants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const findChromePathInPlaywrightCache = async (
+  rootDirectory = "/ms-playwright",
+  { readdir: readdirFn = readdir }: Pick<ChromePathResolverDeps, "readdir"> = {},
+): Promise<string | undefined> => {
+  const pendingDirectories = [rootDirectory]
+
+  while (pendingDirectories.length > 0) {
+    const directory = pendingDirectories.shift()
+    if (!directory)
+      continue
+
+    let entries: Awaited<ReturnType<ReaddirFn>>
+    try {
+      entries = await readdirFn(directory, { withFileTypes: true })
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      const entryPath = join(directory, entry.name)
+
+      if (entry.isDirectory()) {
+        pendingDirectories.push(entryPath)
+        continue
+      }
+
+      if (entry.isFile() && entry.name === "chrome")
+        return entryPath
+    }
+  }
+
+  return undefined
+}
+
+export const resolveChromePath = async ({
+  env = process.env,
+  access: accessFn = access,
+  readdir: readdirFn = readdir,
+}: ChromePathResolverDeps = {}): Promise<string | undefined> => {
+  const configuredChromePath = env["CHROME_PATH"]?.trim()
+  if (configuredChromePath)
+    return configuredChromePath
+
+  const pathEntries = (env["PATH"] ?? "")
+    .split(delimiter)
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0)
+
+  for (const directory of pathEntries) {
+    for (const executableName of chromeExecutableNames) {
+      const candidate = join(directory, executableName)
+      if (await canAccess(candidate, accessFn))
+        return candidate
+    }
+  }
+
+  if (await canAccess("/ms-playwright", accessFn))
+    return findChromePathInPlaywrightCache("/ms-playwright", { readdir: readdirFn })
+
+  return undefined
+}
+
+export const ensureChromePath = async (deps: ChromePathResolverDeps = {}) => {
+  const env = deps.env ?? process.env
+  const resolvedChromePath = await resolveChromePath({ ...deps, env })
+  if (resolvedChromePath && !env["CHROME_PATH"])
+    env["CHROME_PATH"] = resolvedChromePath
+  return resolvedChromePath
 }
 
 export const arkalisBrowser = async (arkalis: ArkalisCore) => {
@@ -90,6 +193,7 @@ export const arkalisBrowser = async (arkalis: ArkalisCore) => {
   }
 
   // launch chrome
+  await ensureChromePath()
   const launchChrome = resolveChromeLaunch(chromeLauncherModule)
   const instance = await launchChrome({
     chromeFlags: switches.map(s => s.length > 0 ? `--${s}` : ""),

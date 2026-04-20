@@ -161,7 +161,7 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/run-evaluator
 
 ### Arkalis / Scraper Runtime
 
-- `CHROME_PATH`: Needed if `chrome-launcher` cannot discover Chromium automatically.
+- `CHROME_PATH`: Optional override for Chromium discovery. If unset, Arkalis first checks standard browser locations on `PATH` and then falls back to the Playwright browser cache under `/ms-playwright` when present.
 - `PROXY_ADDRESS_DEFAULT`: Default proxy list for Arkalis.
 - `PROXY_ADDRESS_<SCRAPER_NAME>`: Per-scraper proxy override, for example `PROXY_ADDRESS_ALASKA`.
 - `PROXY_TZ_DEFAULT`: Default timezone override to pair with a proxy.

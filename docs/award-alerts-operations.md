@@ -147,7 +147,7 @@ curl -X POST http://localhost:2233/api/award-alerts/operations/preview \
 
 - The evaluator runs live Alaska scraping, so Chromium or Chrome must be available in the container image.
 - The container runtime starts its own `Xvfb` display when `DISPLAY` is unset and `Xvfb` is available.
-- `CHROME_PATH` is optional. Use it only when autodiscovery is unreliable or when you need to pin a nonstandard browser path.
+- `CHROME_PATH` is optional. If unset, the runtime first checks standard browser locations on `PATH` and then falls back to the Playwright cache under `/ms-playwright`.
 - On headless Linux, install `xvfb-run` or provide another usable display solution.
 - The `just run-award-alerts-service` target uses `xvfb-run` automatically when `DISPLAY` is unset and `xvfb-run` is available.
 

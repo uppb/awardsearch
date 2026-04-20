@@ -40,7 +40,7 @@ Arkalis is AwardWiz's internal Chromium automation layer. It exists to run airli
 
 ## Operational Notes
 
-- If Chromium is not auto-discovered, set `CHROME_PATH`.
+- `CHROME_PATH` is optional. If it is unset, Arkalis checks standard browser locations on `PATH` and then falls back to the Playwright cache under `/ms-playwright` when present.
 - Proxy configuration is read from `PROXY_ADDRESS_DEFAULT` and `PROXY_ADDRESS_<SCRAPER_NAME>`.
 - Proxy-linked timezone overrides are read from `PROXY_TZ_DEFAULT` and `PROXY_TZ_<SCRAPER_NAME>`.
 - The main scraper server enables result caching and shared browser cache by default.
