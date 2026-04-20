@@ -410,4 +410,4 @@ If another engineer is continuing from here, the highest-value next tasks are:
 
 1. decide whether to add auth before exposing the service outside a trusted network
 2. add the next provider only after the provider interface and operational model are proven stable
-3. decide whether the remaining browser-side marked-fares UI should eventually be retired in a later cleanup phase
+3. keep the backend, worker, CLI, and scraper-debug docs/tests aligned if the runtime surface changes again
