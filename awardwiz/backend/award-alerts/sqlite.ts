@@ -36,7 +36,7 @@ const MIGRATION_V1 = (db: Database.Database) => {
 
     CREATE TABLE IF NOT EXISTS award_alert_runs (
       id TEXT PRIMARY KEY,
-      alert_id TEXT NOT NULL REFERENCES award_alerts(id),
+      alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
       started_at TEXT NOT NULL,
       completed_at TEXT,
       status TEXT NOT NULL,
@@ -48,7 +48,7 @@ const MIGRATION_V1 = (db: Database.Database) => {
 
     CREATE TABLE IF NOT EXISTS notification_events (
       id TEXT PRIMARY KEY,
-      alert_id TEXT NOT NULL REFERENCES award_alerts(id),
+      alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
       status TEXT NOT NULL,
       claimed_at TEXT,
       created_at TEXT NOT NULL,
@@ -79,8 +79,13 @@ const runMigrations = (db: Database.Database) => {
 
 export const openAwardAlertsDb = (filename: string) => {
   const db = new Database(filename)
-  db.pragma("journal_mode = WAL")
-  db.pragma("foreign_keys = ON")
-  runMigrations(db)
-  return db
+  try {
+    db.pragma("journal_mode = WAL")
+    db.pragma("foreign_keys = ON")
+    runMigrations(db)
+    return db
+  } catch (error) {
+    db.close()
+    throw error
+  }
 }
