@@ -168,20 +168,16 @@ Response shape:
   "databasePath": "./tmp/award-alerts.sqlite",
   "evaluator": {
     "running": false,
-    "lastStartedAt": null,
-    "lastCompletedAt": null,
-    "lastError": null,
     "intervalMs": 60000
   },
   "notifier": {
     "running": false,
-    "lastStartedAt": null,
-    "lastCompletedAt": null,
-    "lastError": null,
     "intervalMs": 60000
   }
 }
 ```
+
+When present, loop status may also include `lastStartedAt`, `lastCompletedAt`, and `lastError`.
 
 ### Trigger Evaluator / Notifier
 
@@ -221,7 +217,7 @@ Response shape:
 ```json
 {
   "hasMatch": true,
-  "matchedDates": ["2026-05-02"],
+  "matchedDates": ["2026-05-02", "2026-05-03"],
   "matchingResults": [],
   "bestMatchSummary": null,
   "matchFingerprint": "fp-1",
