@@ -491,4 +491,36 @@ describe("SqliteAwardAlertsRepository", () => {
       db.close()
     }
   })
+
+  it("does not let a stale caller overwrite a finalized stale attempt as delivered_unconfirmed", async () => {
+    const { db, repo } = openRepository()
+
+    try {
+      await repo.insertAlert(buildAlert())
+      repo.createNotificationEvent(buildEvent({
+        id: "event-stale-delivered-unconfirmed",
+        status: "processing",
+        claimedAt: "2026-04-19T00:30:00.000Z",
+        claimToken: "claim-stale",
+      }))
+
+      repo.markNotificationAttempting("event-stale-delivered-unconfirmed", "2026-04-19T00:31:00.000Z", "claim-stale")
+      repo.claimPendingNotificationEvents(1, "2026-04-19T01:00:00.000Z", "2026-04-19T00:45:00.000Z")
+
+      expect(() => repo.markNotificationDeliveredUnconfirmed(
+        "event-stale-delivered-unconfirmed",
+        "At-most-once: later caller should not overwrite finalized stale attempt",
+      )).toThrow("stale claim token")
+      expect(db.prepare("SELECT status, sent_at, claimed_at, claim_token, attempted_at, failure_reason FROM notification_events WHERE id = ?").get("event-stale-delivered-unconfirmed")).toEqual({
+        status: "delivered_unconfirmed",
+        sent_at: null,
+        claimed_at: null,
+        claim_token: null,
+        attempted_at: null,
+        failure_reason: "At-most-once: stale attempting event was finalized without retry after worker interruption (claimed before 2026-04-19T00:45:00.000Z).",
+      })
+    } finally {
+      db.close()
+    }
+  })
 })

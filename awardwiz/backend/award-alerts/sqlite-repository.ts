@@ -420,19 +420,28 @@ export class SqliteAwardAlertsRepository {
   }
 
   markNotificationDeliveredUnconfirmed(id: string, reason: string) {
-    assertRowUpdated(
-      this.db.prepare(`
-        UPDATE notification_events
-        SET status = 'delivered_unconfirmed',
-            sent_at = NULL,
-            claimed_at = NULL,
-            claim_token = NULL,
-            attempted_at = NULL,
-            failure_reason = ?
-        WHERE id = ?
-      `).run(reason, id).changes,
-      "notification event",
-    )
+    this.db.transaction(() => {
+      const current = this.db.prepare("SELECT status, claim_token, attempted_at FROM notification_events WHERE id = ?").get(id) as {
+        status: NotificationEventStatus
+        claim_token: string | null
+        attempted_at: string | null
+      } | undefined
+      assertClaimStillActive(current)
+
+      assertRowUpdated(
+        this.db.prepare(`
+          UPDATE notification_events
+          SET status = 'delivered_unconfirmed',
+              sent_at = NULL,
+              claimed_at = NULL,
+              claim_token = NULL,
+              attempted_at = NULL,
+              failure_reason = ?
+          WHERE id = ?
+        `).run(reason, id).changes,
+        "notification event",
+      )
+    })()
   }
 
   markNotificationSent(id: string, sentAt: string) {
