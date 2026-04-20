@@ -17,6 +17,7 @@ This README is for developers working on the codebase. It describes what is impl
 - Normalizes scraper output into a shared `FlightWithFares` shape, merges duplicate flights, annotates amenities, and infers saver fares when possible.
 - Displays merged results in a React frontend with cached query results, sortable fare columns, login via Google/Firebase Auth, and a Firestore-backed "marked fares" UI.
 - Includes a worker that re-runs marked-fare searches and sends notification emails when saver availability changes.
+- Includes a separate SQLite-backed `award-alerts` backend for generic award alert scheduling, evaluation, and Discord notification delivery.
 
 ## Important Limitations
 
@@ -26,6 +27,7 @@ This README is for developers working on the codebase. It describes what is impl
 - Several scrapers exist in the repo but are disabled in `config.json`, so code presence does not mean the scraper is active.
 - Scraper reliability varies by airline because anti-botting behavior changes over time.
 - Marked-fare notifications exist, but the worker is still effectively beta-only: it hardcodes a `BETA_USERS` allowlist and only reacts to saver-availability changes.
+- The SQLite award-alert backend is backend-only and CLI-managed; there is no user-facing CRUD/API surface yet.
 - Auth is required for normal frontend scraper calls unless you provide `VITE_SCRAPERS_TOKEN`.
 - The repo has unit coverage for the search-merging pipeline and a scaffold for live scraper tests, but the live scraper suite is currently commented out.
 
@@ -50,7 +52,8 @@ Defined but currently disabled in `config.json`:
 ## Repo Layout
 
 - `awardwiz/`: React frontend, shared search pipeline, Firebase integration, workers, and static assets.
-- `awardwiz/backend/alaska-alerts/`: backend-only Alaska alert domain, matching, persistence, scheduling, and notification modules.
+- `awardwiz/backend/alaska-alerts/`: legacy Alaska-specific alert code still present during the migration.
+- `awardwiz/backend/award-alerts/`: generic SQLite-backed alert backend, CLI, scheduler, evaluator, notifier, and provider adapters.
 - `awardwiz-scrapers/`: scraper server, CLI debug entry point, scraper modules, and typed airline response shapes.
 - `arkalis/`: internal Chromium/CDP automation layer used by the scrapers.
 - `test/awardwiz/`: stub-driven tests for route discovery and result merging.
@@ -153,11 +156,12 @@ Optional for the browser app:
 
 ### Workers
 
-- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators, and by the Alaska evaluator / notifier Firestore repository path when not using emulators or the Firebase emulators.
+- `VITE_FIREBASE_SERVICE_ACCOUNT_JSON`: Required by `awardwiz/workers/marked-fares.ts` when not using emulators.
 - `VITE_SMTP_CONNECTION_STRING`: SMTP connection string for real notification delivery. If missing, the worker falls back to a Nodemailer test account.
-- `DISCORD_WEBHOOK_URL`: Required by `awardwiz/workers/alaska-alerts-notifier.ts`.
-- `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/alaska-alerts-notifier.ts`.
-- `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/alaska-alerts-notifier.ts`.
+- `DATABASE_PATH`: Required by the SQLite-backed `award-alerts` CLI and workers unless you want the default `./tmp/award-alerts.sqlite`.
+- `DISCORD_WEBHOOK_URL`: Required by `awardwiz/workers/award-alerts-notifier.ts`.
+- `DISCORD_USERNAME`: Optional Discord webhook username override for `awardwiz/workers/award-alerts-notifier.ts`.
+- `DISCORD_AVATAR_URL`: Optional Discord webhook avatar URL override for `awardwiz/workers/award-alerts-notifier.ts`.
 
 ### Scraper Server
 
@@ -175,7 +179,7 @@ Optional for the browser app:
 - `PROXY_TZ_DEFAULT`: Default timezone override to pair with a proxy.
 - `PROXY_TZ_<SCRAPER_NAME>`: Per-scraper timezone override, for example `PROXY_TZ_ALASKA`.
 
-## Notes On Notifications
+## Notification Backends
 
 The marked-fares flow is implemented, but it is not a general-purpose finished feature yet:
 
@@ -185,14 +189,19 @@ The marked-fares flow is implemented, but it is not a general-purpose finished f
 - Emails are only sent when saver availability changes.
 - The worker currently filters to a hardcoded beta-user allowlist.
 
-There is also an in-progress backend-only Alaska alert path:
+The newer `award-alerts` backend is separate from marked fares:
 
-- `awardwiz/workers/alaska-alerts-evaluator.ts` updates alert state and run records for due Alaska alerts, and emits notification events when a matching alert is eligible to notify again.
-- `awardwiz/workers/alaska-alerts-notifier.ts` posts those pending notification events to a shared Discord webhook.
-- `.github/workflows/alaska-alerts-worker.yaml` runs the evaluator and notifier on merges to `master` and on a cron schedule in the shared `workers` environment.
+- It lives under `awardwiz/backend/award-alerts/` and `awardwiz/workers/award-alerts-*.ts`.
+- It uses one SQLite database file for alert definitions, state, run history, and notification events.
+- Alert management is CLI-only today:
+  - `just award-alerts-cli list`
+  - `just award-alerts-cli create --program alaska --origin SFO --destination HNL --date 2026-07-01 --cabin business`
+  - `just award-alerts-cli show <alert-id>`
+- The evaluator worker claims due alerts from SQLite, runs provider-specific search/match logic, and enqueues pending Discord notification events.
+- The notifier worker claims pending notification events from SQLite and posts them to one shared Discord webhook.
 - Discord delivery is at-most-once by design so the notifier does not retry ambiguous delivery attempts that could duplicate posts in the channel.
-- Each Discord alert includes the generic Alaska booking results link for the best matched date.
-- This backend path is still under active development and is not yet wired into a user-facing CRUD/API flow.
+- Persistent server execution is the intended production model for this service. GitHub Actions is no longer the intended runtime for evaluator/notifier loops.
+- Alaska is the first provider, but the runtime surface is generic under `award-alerts`.
 
 ## Arkalis Summary
 

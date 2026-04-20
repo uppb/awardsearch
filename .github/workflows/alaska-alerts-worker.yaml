@@ -1,37 +1,28 @@
-name: Alaska Alerts Worker
+name: Alaska Alerts Worker Runtime Note
 on:
-  push:
-    branches: ["master"]
-
-  schedule:
-    - cron: '*/10 * * * *' # every 10 minutes
+  workflow_dispatch:
 
 concurrency:
   group: "alaska-alerts-worker"
   cancel-in-progress: true
 
 jobs:
-  alaska-alerts-worker:
-    name: alaska-alerts-worker
+  runtime-note:
+    name: runtime-note
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: workers
-    env:
-      PUPPETEER_SKIP_DOWNLOAD: "true"
-      TMP_PATH: /tmp
-      VITE_FIREBASE_CONFIG_JSON: ${{ secrets.VITE_FIREBASE_CONFIG_JSON }}
-      VITE_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.VITE_FIREBASE_SERVICE_ACCOUNT_JSON }}
-      VITE_LOKI_LOGGING_URL: ${{ secrets.VITE_LOKI_LOGGING_URL }}
-      VITE_LOKI_LOGGING_UID: alaska_alerts_worker
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      DISCORD_USERNAME: ${{ secrets.DISCORD_USERNAME }}
-      DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: extractions/setup-just@v1
-      - uses: actions/setup-node@v3
-        with:
-          cache: 'npm'
-      - run: npm ci
-      - run: just run-alaska-alerts-evaluator
-      - run: just run-alaska-alerts-notifier
+    steps:
+      - name: Print runtime boundary
+        run: |
+          cat <<'EOF'
+          The SQLite-backed award-alert service is not intended to run in GitHub Actions.
+
+          Current production model:
+          - run `awardwiz/workers/award-alerts-evaluator.ts` on one persistent server
+          - run `awardwiz/workers/award-alerts-notifier.ts` on the same server
+          - keep `DATABASE_PATH` on persistent disk
+          - provide `DISCORD_WEBHOOK_URL` and optional Discord overrides there
+
+          This workflow exists only as an explicit note so the repository does not imply
+          that GitHub-hosted cron, Firestore, or Firebase credentials are the worker runtime.
+          EOF

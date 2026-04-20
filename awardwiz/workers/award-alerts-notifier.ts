@@ -5,17 +5,42 @@ import { sendNotificationEvent } from "../backend/award-alerts/notifier.js"
 import { SqliteAwardAlertsRepository } from "../backend/award-alerts/sqlite-repository.js"
 import { openAwardAlertsDb } from "../backend/award-alerts/sqlite.js"
 
-export const runNotifierWorker = async () => {
-  const webhookUrl = process.env["DISCORD_WEBHOOK_URL"]
+type NotifierWorkerRepository = Pick<
+  SqliteAwardAlertsRepository,
+  | "claimPendingNotificationEvents"
+  | "markNotificationAttempting"
+  | "markNotificationSent"
+  | "markNotificationDeliveredUnconfirmed"
+  | "markNotificationFailed"
+>
+
+type NotifierWorkerOptions = {
+  databasePath?: string
+  repository?: NotifierWorkerRepository
+  webhookUrl?: string
+  fetchFn?: typeof fetch
+  now?: Date
+  username?: string
+  avatarUrl?: string
+}
+
+export const runNotifierWorker = async ({
+  databasePath,
+  repository: injectedRepository,
+  webhookUrl = process.env["DISCORD_WEBHOOK_URL"],
+  fetchFn = fetch,
+  now = new Date(),
+  username = process.env["DISCORD_USERNAME"],
+  avatarUrl = process.env["DISCORD_AVATAR_URL"],
+}: NotifierWorkerOptions = {}) => {
   if (!webhookUrl)
     throw new Error("Missing DISCORD_WEBHOOK_URL environment variable")
 
-  const db = openAwardAlertsDb(process.env["DATABASE_PATH"] ?? "./tmp/award-alerts.sqlite")
-  const repository = new SqliteAwardAlertsRepository(db)
-  const claimedAt = new Date().toISOString()
-  const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString()
-  const username = process.env["DISCORD_USERNAME"]
-  const avatarUrl = process.env["DISCORD_AVATAR_URL"]
+  const dbPath = databasePath ?? process.env["DATABASE_PATH"] ?? "./tmp/award-alerts.sqlite"
+  const db = injectedRepository ? undefined : openAwardAlertsDb(dbPath)
+  const repository = injectedRepository ?? new SqliteAwardAlertsRepository(db!)
+  const claimedAt = now.toISOString()
+  const staleBefore = new Date(now.getTime() - 15 * 60 * 1000).toISOString()
 
   try {
     const pendingEvents = repository.claimPendingNotificationEvents(20, claimedAt, staleBefore)
@@ -25,9 +50,9 @@ export const runNotifierWorker = async () => {
         await sendNotificationEvent({
           event,
           repository,
-          now: new Date(),
+          now,
           webhookUrl,
-          fetchFn: fetch,
+          fetchFn,
           username,
           avatarUrl,
         })
@@ -37,8 +62,9 @@ export const runNotifierWorker = async () => {
     }
 
     console.log(`processed ${pendingEvents.length} notification event(s)`)
+    return pendingEvents.length
   } finally {
-    db.close()
+    db?.close()
   }
 }
 
