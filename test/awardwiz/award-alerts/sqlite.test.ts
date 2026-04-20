@@ -5,21 +5,67 @@ import { join } from "node:path"
 import Database from "better-sqlite3"
 import { openAwardAlertsDb } from "../../../awardwiz/backend/award-alerts/sqlite.js"
 
+const normalizeSql = (sql: string | null) =>
+  (() => {
+    if (!sql)
+      return ""
+
+    let normalized = sql.trim().toLowerCase()
+    if (normalized.endsWith(";"))
+      normalized = normalized.slice(0, -1).trimEnd()
+
+    let result = ""
+    let pendingSpace = false
+    for (const character of normalized) {
+      if (
+        character === " "
+        || character === "\n"
+        || character === "\r"
+        || character === "\t"
+        || character === "\f"
+        || character === "\v"
+      ) {
+        pendingSpace = true
+        continue
+      }
+
+      if (pendingSpace && result.length > 0)
+        result += " "
+
+      pendingSpace = false
+      result += character
+    }
+
+    return result.replaceAll("( ", "(").replaceAll(" )", ")")
+  })()
+
+const getSqlByName = (db: Database.Database, type: "table" | "index") =>
+  Object.fromEntries(
+    (db.prepare("SELECT name, sql FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_autoindex_%' ORDER BY name").all(type) as { name: string; sql: string | null }[])
+      .map(({ name, sql }) => [name, normalizeSql(sql)]),
+  )
+
+const seedDriftedSchema = (dbPath: string, userVersion: 0 | 1) => {
+  const db = new Database(dbPath)
+  try {
+    db.exec(`
+      CREATE TABLE award_alerts (
+        id TEXT PRIMARY KEY
+      );
+    `)
+    db.pragma(`user_version = ${userVersion}`)
+  } finally {
+    db.close()
+  }
+}
+
 describe("openAwardAlertsDb", () => {
-  it("creates the expected schema and pragmas", () => {
+  it("creates the expected v1 schema and pragmas", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
 
     const db = openAwardAlertsDb(dbPath)
     try {
-      const getNames = (type: "table" | "index") =>
-        (db.prepare(`SELECT name FROM sqlite_master WHERE type = '${type}' ORDER BY name`).all() as { name: string }[])
-          .map(({ name }) => name)
-          .filter((name) => !name.startsWith("sqlite_autoindex_"))
-          .slice()
-          .sort()
-
-      expect(db).toBeInstanceOf(Database)
       expect({
         journal_mode: db.pragma("journal_mode", { simple: true }),
         foreign_keys: db.pragma("foreign_keys", { simple: true }),
@@ -29,60 +75,121 @@ describe("openAwardAlertsDb", () => {
         foreign_keys: 1,
         user_version: 1,
       })
-      expect(getNames("table")).toStrictEqual([
-        "award_alert_runs",
-        "award_alert_state",
-        "award_alerts",
-        "notification_events",
-      ].slice().sort())
-      expect(getNames("index")).toStrictEqual([
-        "idx_award_alert_runs_alert_id_completed_at",
-        "idx_award_alerts_active_next_check_at",
-        "idx_notification_events_status_claimed_at_created_at",
-      ].slice().sort())
+      expect(getSqlByName(db, "table")).toStrictEqual({
+        award_alert_runs: normalizeSql(`
+          CREATE TABLE award_alert_runs (
+            id TEXT PRIMARY KEY,
+            alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            searched_dates TEXT,
+            scrape_count INTEGER NOT NULL DEFAULT 0 CHECK (scrape_count >= 0),
+            scrape_success_count INTEGER NOT NULL DEFAULT 0 CHECK (scrape_success_count >= 0),
+            scrape_error_count INTEGER NOT NULL DEFAULT 0 CHECK (scrape_error_count >= 0),
+            matched_result_count INTEGER NOT NULL DEFAULT 0 CHECK (matched_result_count >= 0),
+            has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
+            error_summary TEXT
+          )
+        `),
+        award_alert_state: normalizeSql(`
+          CREATE TABLE award_alert_state (
+            alert_id TEXT PRIMARY KEY REFERENCES award_alerts(id) ON DELETE CASCADE,
+            has_match INTEGER NOT NULL CHECK (has_match IN (0, 1)),
+            matched_dates TEXT,
+            matching_results TEXT,
+            best_match_summary TEXT,
+            match_fingerprint TEXT,
+            last_match_at TEXT,
+            last_notified_at TEXT,
+            last_error_at TEXT,
+            last_error_message TEXT,
+            updated_at TEXT NOT NULL
+          )
+        `),
+        award_alerts: normalizeSql(`
+          CREATE TABLE award_alerts (
+            id TEXT PRIMARY KEY,
+            program TEXT NOT NULL CHECK (program = 'alaska'),
+            user_id TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            destination TEXT NOT NULL,
+            date_mode TEXT NOT NULL CHECK (date_mode IN ('single_date', 'date_range')),
+            date TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            cabin TEXT NOT NULL CHECK (cabin IN ('economy', 'business', 'first')),
+            nonstop_only INTEGER NOT NULL CHECK (nonstop_only IN (0, 1)),
+            max_miles INTEGER,
+            max_cash REAL,
+            active INTEGER NOT NULL CHECK (active IN (0, 1)),
+            poll_interval_minutes INTEGER NOT NULL CHECK (poll_interval_minutes > 0),
+            min_notification_interval_minutes INTEGER NOT NULL CHECK (min_notification_interval_minutes > 0),
+            last_checked_at TEXT,
+            next_check_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            CHECK (
+              (date_mode = 'single_date' AND date IS NOT NULL AND start_date IS NULL AND end_date IS NULL)
+              OR
+              (date_mode = 'date_range' AND date IS NULL AND start_date IS NOT NULL AND end_date IS NOT NULL)
+            )
+          )
+        `),
+        notification_events: normalizeSql(`
+          CREATE TABLE notification_events (
+            id TEXT PRIMARY KEY,
+            alert_id TEXT NOT NULL REFERENCES award_alerts(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+            claimed_at TEXT,
+            claim_token TEXT,
+            attempted_at TEXT,
+            payload TEXT NOT NULL,
+            sent_at TEXT,
+            failure_reason TEXT
+          )
+        `),
+      })
+      expect(getSqlByName(db, "index")).toStrictEqual({
+        idx_award_alert_runs_alert_id_completed_at: normalizeSql(`
+          CREATE INDEX idx_award_alert_runs_alert_id_completed_at
+          ON award_alert_runs(alert_id, completed_at)
+        `),
+        idx_award_alerts_active_next_check_at: normalizeSql(`
+          CREATE INDEX idx_award_alerts_active_next_check_at
+          ON award_alerts(active, next_check_at)
+        `),
+        idx_notification_events_status_claimed_at_created_at: normalizeSql(`
+          CREATE INDEX idx_notification_events_status_claimed_at_created_at
+          ON notification_events(status, claimed_at, created_at)
+        `),
+      })
     } finally {
       db.close()
     }
   })
 
-  it("uses cascading foreign keys for child tables", () => {
+  it("rejects a drifted schema that is already marked version 1", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
+    seedDriftedSchema(dbPath, 1)
 
-    const db = openAwardAlertsDb(dbPath)
-    try {
-      const getForeignKeys = (table: string) =>
-        (db.prepare(`PRAGMA foreign_key_list('${table}')`).all() as { table: string; on_delete: string }[])
-          .map(({ table, on_delete }) => ({ table, on_delete }))
-
-      expect(getForeignKeys("award_alert_state")).toStrictEqual([
-        { table: "award_alerts", on_delete: "CASCADE" },
-      ])
-      expect(getForeignKeys("award_alert_runs")).toStrictEqual([
-        { table: "award_alerts", on_delete: "CASCADE" },
-      ])
-      expect(getForeignKeys("notification_events")).toStrictEqual([
-        { table: "award_alerts", on_delete: "CASCADE" },
-      ])
-    } finally {
-      db.close()
-    }
+    expect(() => openAwardAlertsDb(dbPath)).toThrow("award alerts SQLite schema does not match v1")
   })
 
-  it("does not replay migrations on reopen", () => {
+  it("does not mark a failed migration as version 1", () => {
     const dir = mkdtempSync(join(tmpdir(), "award-alerts-sqlite-"))
     const dbPath = join(dir, "alerts.sqlite")
+    seedDriftedSchema(dbPath, 0)
 
-    const initialDb = openAwardAlertsDb(dbPath)
-    initialDb.close()
+    expect(() => openAwardAlertsDb(dbPath)).toThrow("table award_alerts already exists")
 
-    const reopenedDb = openAwardAlertsDb(dbPath)
+    const db = new Database(dbPath)
     try {
-      expect(reopenedDb.pragma("user_version", { simple: true })).toBe(1)
-      expect(reopenedDb.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table'").get() as { count: number })
-        .toStrictEqual({ count: 4 })
+      expect(db.pragma("user_version", { simple: true })).toBe(0)
     } finally {
-      reopenedDb.close()
+      db.close()
     }
   })
 
@@ -104,11 +211,11 @@ describe("openAwardAlertsDb", () => {
         )
       `).run({
         id: "alert-1",
-        program: "aa",
+        program: "alaska",
         user_id: "user-1",
         origin: "SFO",
         destination: "HNL",
-        date_mode: "date",
+        date_mode: "single_date",
         date: "2026-04-19",
         start_date: null,
         end_date: null,
@@ -125,23 +232,70 @@ describe("openAwardAlertsDb", () => {
         updated_at: "2026-04-19T00:00:00Z",
       })
       db.prepare(`
-        INSERT INTO award_alert_state (alert_id, state, updated_at)
-        VALUES (?, ?, ?)
-      `).run("alert-1", "ready", "2026-04-19T00:00:00Z")
+        INSERT INTO award_alert_state (
+          alert_id, has_match, matched_dates, matching_results, best_match_summary, match_fingerprint,
+          last_match_at, last_notified_at, last_error_at, last_error_message, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "alert-1",
+        1,
+        "[]",
+        "[]",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "2026-04-19T00:00:00Z",
+      )
       db.prepare(`
-        INSERT INTO award_alert_runs (id, alert_id, started_at, completed_at, status, error)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run("run-1", "alert-1", "2026-04-19T00:00:00Z", null, "running", null)
+        INSERT INTO award_alert_runs (
+          id, alert_id, started_at, completed_at, searched_dates, scrape_count, scrape_success_count,
+          scrape_error_count, matched_result_count, has_match, error_summary
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "run-1",
+        "alert-1",
+        "2026-04-19T00:00:00Z",
+        null,
+        "[]",
+        1,
+        1,
+        0,
+        1,
+        1,
+        null,
+      )
       db.prepare(`
-        INSERT INTO notification_events (id, alert_id, status, claimed_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run("event-1", "alert-1", "pending", null, "2026-04-19T00:00:00Z", "2026-04-19T00:00:00Z")
+        INSERT INTO notification_events (
+          id, alert_id, user_id, created_at, status, claimed_at, claim_token, attempted_at, payload, sent_at, failure_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "event-1",
+        "alert-1",
+        "user-1",
+        "2026-04-19T00:00:00Z",
+        "pending",
+        null,
+        null,
+        null,
+        "{}",
+        null,
+        null,
+      )
 
       db.prepare("DELETE FROM award_alerts WHERE id = ?").run("alert-1")
 
-      expect(db.prepare("SELECT COUNT(*) AS count FROM award_alert_state").get() as { count: number }).toStrictEqual({ count: 0 })
-      expect(db.prepare("SELECT COUNT(*) AS count FROM award_alert_runs").get() as { count: number }).toStrictEqual({ count: 0 })
-      expect(db.prepare("SELECT COUNT(*) AS count FROM notification_events").get() as { count: number }).toStrictEqual({ count: 0 })
+      expect({
+        award_alert_state: db.prepare("SELECT COUNT(*) AS count FROM award_alert_state").get() as { count: number },
+        award_alert_runs: db.prepare("SELECT COUNT(*) AS count FROM award_alert_runs").get() as { count: number },
+        notification_events: db.prepare("SELECT COUNT(*) AS count FROM notification_events").get() as { count: number },
+      }).toStrictEqual({
+        award_alert_state: { count: 0 },
+        award_alert_runs: { count: 0 },
+        notification_events: { count: 0 },
+      })
     } finally {
       db.close()
     }
