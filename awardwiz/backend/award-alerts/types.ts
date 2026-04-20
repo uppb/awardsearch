@@ -87,6 +87,33 @@ export type AwardSearchQuery = {
   departureDate: string
 }
 
+export type RawScraperBatchInput = {
+  scraperName: string
+  items: AwardSearchQuery[]
+}
+
+export type RawScraperBatchItemResult =
+  | (AwardSearchQuery & {
+      ok: true
+      response: {
+        result: unknown
+        logLines: string[]
+      }
+    })
+  | (AwardSearchQuery & {
+      ok: false
+      error: string
+      response?: {
+        result: unknown
+        logLines: string[]
+      }
+    })
+
+export type RawScraperBatchResult = {
+  scraperName: string
+  results: RawScraperBatchItemResult[]
+}
+
 export type AwardSearch = (query: AwardSearchQuery) => Promise<FlightWithFares[]>
 
 export type AwardAlertMatchEvaluation = {

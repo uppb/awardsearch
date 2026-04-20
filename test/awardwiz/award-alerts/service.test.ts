@@ -3,6 +3,7 @@ import { createAwardAlertsService } from "../../../awardwiz/backend/award-alerts
 import type {
   AwardAlert,
   AwardAlertRun,
+  AwardSearchQuery,
   AwardAlertState,
   NotificationEvent,
 } from "../../../awardwiz/backend/award-alerts/types.js"
@@ -458,5 +459,95 @@ describe("award alerts service", () => {
     await expect(service.triggerNotifierRun()).resolves.toEqual({ started: false, reason: "already_running" })
     expect(runEvaluator).toHaveBeenCalledOnce()
     expect(runNotifier).toHaveBeenCalledOnce()
+  })
+
+  it("runs raw scraper batches per item and localizes item failures", async () => {
+    const { repository } = createRepository()
+    const getRawScraperSearch = vi.fn(async (scraperName: string) => {
+      expect(scraperName).toBe("alaska")
+
+      return async (query: AwardSearchQuery) => {
+        if (query.departureDate === "2026-05-03")
+          throw new Error("timeout waiting for results")
+
+        return {
+          result: {
+            flights: [{
+              flightNo: "JL 82",
+              miles: 32500,
+            }],
+          },
+          logLines: ["search ok"],
+        }
+      }
+    })
+
+    const service = createAwardAlertsService({
+      repository,
+      now: () => new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-1",
+      runtimeStatus: () => ({ evaluator: { running: false }, notifier: { running: false } }),
+      runEvaluator: vi.fn(),
+      runNotifier: vi.fn(),
+      getRawScraperSearch,
+    })
+
+    await expect(service.runScraperBatch({
+      scraperName: "alaska",
+      items: [
+        { origin: "SHA", destination: "HND", departureDate: "2026-05-02" },
+        { origin: "SHA", destination: "HND", departureDate: "2026-05-03" },
+      ],
+    })).resolves.toEqual({
+      scraperName: "alaska",
+      results: [
+        {
+          origin: "SHA",
+          destination: "HND",
+          departureDate: "2026-05-02",
+          ok: true,
+          response: {
+            result: {
+              flights: [{
+                flightNo: "JL 82",
+                miles: 32500,
+              }],
+            },
+            logLines: ["search ok"],
+          },
+        },
+        {
+          origin: "SHA",
+          destination: "HND",
+          departureDate: "2026-05-03",
+          ok: false,
+          error: "timeout waiting for results",
+        },
+      ],
+    })
+
+    expect(getRawScraperSearch).toHaveBeenCalledOnce()
+  })
+
+  it("rejects unsupported raw scraper batch requests before running items", async () => {
+    const { repository } = createRepository()
+    const getRawScraperSearch = vi.fn(async () => {
+      throw new Error("unsupported scraper: skyscanner")
+    })
+
+    const service = createAwardAlertsService({
+      repository,
+      now: () => new Date("2026-04-20T00:00:00.000Z"),
+      generateId: () => "alert-1",
+      runtimeStatus: () => ({ evaluator: { running: false }, notifier: { running: false } }),
+      runEvaluator: vi.fn(),
+      runNotifier: vi.fn(),
+      getRawScraperSearch,
+    })
+
+    await expect(service.runScraperBatch({
+      scraperName: "skyscanner",
+      items: [{ origin: "SHA", destination: "HND", departureDate: "2026-05-02" }],
+    })).rejects.toThrow("unsupported scraper: skyscanner")
   })
 })

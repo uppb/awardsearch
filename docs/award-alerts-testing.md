@@ -155,6 +155,7 @@ DATABASE_PATH=./tmp/award-alerts.sqlite DISCORD_WEBHOOK_URL=https://discord.com/
 Then exercise:
 
 - `POST /api/award-alerts` for the known `SHA -> HND` single-date case
+- `POST /api/award-alerts/operations/run-scraper` for the known raw Alaska validation batch
 - `POST /api/award-alerts/operations/preview` for the known date-range case
 - `POST /api/award-alerts/operations/run-evaluator`
 - `GET /api/award-alerts/status` to confirm both embedded loops are visible
