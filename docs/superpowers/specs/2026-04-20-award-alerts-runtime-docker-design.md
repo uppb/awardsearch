@@ -114,31 +114,31 @@ The repo should no longer present these as supported:
 
 ### Keep
 
-- `awardwiz/backend/award-alerts/*`
-- `awardwiz/workers/award-alerts-service.ts`
-- `awardwiz-scrapers/main-debug.ts`
-- `awardwiz-scrapers/scrapers/*`
+- `awardsearch/backend/award-alerts/*`
+- `awardsearch/workers/award-alerts-service.ts`
+- `awardsearch-scrapers/main-debug.ts`
+- `awardsearch-scrapers/scrapers/*`
 - `arkalis/*`
 - service/provider/scraper tests
-- `awardwiz/backend/award-alerts/Dockerfile`
+- `awardsearch/backend/award-alerts/Dockerfile`
 
 ### Remove
 
-- `awardwiz/workers/award-alerts-evaluator.ts`
-- `awardwiz/workers/award-alerts-notifier.ts`
-- `awardwiz/backend/award-alerts/cli.ts`
+- `awardsearch/workers/award-alerts-evaluator.ts`
+- `awardsearch/workers/award-alerts-notifier.ts`
+- `awardsearch/backend/award-alerts/cli.ts`
 - `Justfile` commands for evaluator/notifier/CLI
-- host-based deployment instructions in `docs/award-alerts-operations.md`
+- host-based deployment instructions in `docs/operations/award-alerts-operations.md`
 - dead deployment comments in `Justfile` that describe old infra paths
 
 ### Retain but reframe
 
 - `README.md`
-- `docs/award-alerts-operations.md`
-- `docs/award-alerts-testing.md`
-- `docs/award-alerts-backend-handoff.md`
-- `docs/award-alerts-api.md`
-- `awardwiz/backend/award-alerts/openapi.json`
+- `docs/operations/award-alerts-operations.md`
+- `docs/testing/award-alerts-testing.md`
+- `docs/product/award-alerts-backend-handoff.md`
+- `docs/api/award-alerts-api.md`
+- `awardsearch/backend/award-alerts/openapi.json`
 
 These stay, but they should describe API-only management and container-only deployment.
 
@@ -189,7 +189,7 @@ If Docker is not available, the repo should still be cleaned and the Docker comm
 ### Documentation
 
 - rewrite `README.md` around API-only management and container-only deployment
-- rewrite `docs/award-alerts-operations.md` to make Docker the only supported production model
+- rewrite `docs/operations/award-alerts-operations.md` to make Docker the only supported production model
 - update testing docs so service verification is described through the API and container flow
 - update handoff doc so current capabilities and next steps reflect the narrowed runtime surface
 

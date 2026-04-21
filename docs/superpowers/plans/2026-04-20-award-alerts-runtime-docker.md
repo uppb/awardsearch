@@ -14,28 +14,28 @@
 
 ### Runtime files
 
-- Create: `awardwiz/backend/award-alerts/runtime-workers.ts`
-- Modify: `awardwiz/workers/award-alerts-service.ts`
-- Remove: `awardwiz/workers/award-alerts-evaluator.ts`
-- Remove: `awardwiz/workers/award-alerts-notifier.ts`
-- Remove: `awardwiz/backend/award-alerts/cli.ts`
+- Create: `awardsearch/backend/award-alerts/runtime-workers.ts`
+- Modify: `awardsearch/workers/award-alerts-service.ts`
+- Remove: `awardsearch/workers/award-alerts-evaluator.ts`
+- Remove: `awardsearch/workers/award-alerts-notifier.ts`
+- Remove: `awardsearch/backend/award-alerts/cli.ts`
 
 ### Tests
 
-- Modify: `test/awardwiz/award-alerts/workers.test.ts`
-- Modify: `test/awardwiz/award-alerts/retired-modules.test.ts`
+- Modify: `test/awardsearch/award-alerts/workers.test.ts`
+- Modify: `test/awardsearch/award-alerts/retired-modules.test.ts`
 
 ### Commands and docs
 
 - Modify: `Justfile`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-testing.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/testing/award-alerts-testing.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
 
 ### Container runtime
 
-- Modify: `awardwiz/backend/award-alerts/Dockerfile`
+- Modify: `awardsearch/backend/award-alerts/Dockerfile`
 
 ## Verification Baseline
 
@@ -44,15 +44,15 @@ Run these after any task that changes code or runtime surfaces:
 ```bash
 just test
 npm exec tsc -- --noEmit
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 just run-scraper alaska SHA HND 2026-05-02
 ```
 
 If Docker is available, also run:
 
 ```bash
-docker build -f awardwiz/backend/award-alerts/Dockerfile -t awardwiz:award-alerts .
+docker build -f awardsearch/backend/award-alerts/Dockerfile -t awardsearch:award-alerts .
 docker run --rm -p 2233:2233 \
   -e DATABASE_PATH=/data/award-alerts.sqlite \
   -e DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/test/test \
@@ -79,18 +79,18 @@ If Docker is unavailable in the implementation environment, keep the code and do
 ## Task 1: Extract Service-Used Worker Logic From Standalone Entry Points
 
 **Files:**
-- Create: `awardwiz/backend/award-alerts/runtime-workers.ts`
-- Modify: `awardwiz/workers/award-alerts-service.ts`
-- Modify: `test/awardwiz/award-alerts/workers.test.ts`
+- Create: `awardsearch/backend/award-alerts/runtime-workers.ts`
+- Modify: `awardsearch/workers/award-alerts-service.ts`
+- Modify: `test/awardsearch/award-alerts/workers.test.ts`
 
 - [ ] **Step 1: Add a failing regression test boundary for the shared worker helpers**
 
-Update `test/awardwiz/award-alerts/workers.test.ts` so it imports the evaluator/notifier runner functions from a backend-owned module instead of from the standalone entrypoint files.
+Update `test/awardsearch/award-alerts/workers.test.ts` so it imports the evaluator/notifier runner functions from a backend-owned module instead of from the standalone entrypoint files.
 
 Target import shape:
 
 ```ts
-import { runEvaluatorWorker, runNotifierWorker } from "../../../awardwiz/backend/award-alerts/runtime-workers.js"
+import { runEvaluatorWorker, runNotifierWorker } from "../../../awardsearch/backend/award-alerts/runtime-workers.js"
 ```
 
 - [ ] **Step 2: Run the targeted worker test to confirm it fails before extraction**
@@ -98,7 +98,7 @@ import { runEvaluatorWorker, runNotifierWorker } from "../../../awardwiz/backend
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/workers.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/workers.test.ts
 ```
 
 Expected:
@@ -108,12 +108,12 @@ Expected:
 
 Move the reusable logic from:
 
-- `awardwiz/workers/award-alerts-evaluator.ts`
-- `awardwiz/workers/award-alerts-notifier.ts`
+- `awardsearch/workers/award-alerts-evaluator.ts`
+- `awardsearch/workers/award-alerts-notifier.ts`
 
 into:
 
-- `awardwiz/backend/award-alerts/runtime-workers.ts`
+- `awardsearch/backend/award-alerts/runtime-workers.ts`
 
 The new module should export these stable functions:
 
@@ -130,7 +130,7 @@ Guidelines:
 
 - [ ] **Step 4: Repoint the combined service to the shared worker module**
 
-Update `awardwiz/workers/award-alerts-service.ts` imports from:
+Update `awardsearch/workers/award-alerts-service.ts` imports from:
 
 ```ts
 import { runEvaluatorWorker } from "./award-alerts-evaluator.js"
@@ -148,7 +148,7 @@ import { runEvaluatorWorker, runNotifierWorker } from "../backend/award-alerts/r
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/workers.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/workers.test.ts
 npm exec tsc -- --noEmit
 ```
 
@@ -158,27 +158,27 @@ Expected:
 - [ ] **Step 6: Commit Task 1**
 
 ```bash
-git add awardwiz/backend/award-alerts/runtime-workers.ts awardwiz/workers/award-alerts-service.ts test/awardwiz/award-alerts/workers.test.ts
+git add awardsearch/backend/award-alerts/runtime-workers.ts awardsearch/workers/award-alerts-service.ts test/awardsearch/award-alerts/workers.test.ts
 git commit -m "Extract award alerts runtime worker helpers"
 ```
 
 ## Task 2: Remove CLI And Standalone Worker Surfaces
 
 **Files:**
-- Remove: `awardwiz/workers/award-alerts-evaluator.ts`
-- Remove: `awardwiz/workers/award-alerts-notifier.ts`
-- Remove: `awardwiz/backend/award-alerts/cli.ts`
-- Modify: `test/awardwiz/award-alerts/retired-modules.test.ts`
+- Remove: `awardsearch/workers/award-alerts-evaluator.ts`
+- Remove: `awardsearch/workers/award-alerts-notifier.ts`
+- Remove: `awardsearch/backend/award-alerts/cli.ts`
+- Modify: `test/awardsearch/award-alerts/retired-modules.test.ts`
 - Modify: `Justfile`
 
 - [ ] **Step 1: Extend the retired-modules test to cover the newly retired runtime surfaces**
 
-Add these paths to `test/awardwiz/award-alerts/retired-modules.test.ts`:
+Add these paths to `test/awardsearch/award-alerts/retired-modules.test.ts`:
 
 ```ts
-"../../../awardwiz/backend/award-alerts/cli.ts",
-"../../../awardwiz/workers/award-alerts-evaluator.ts",
-"../../../awardwiz/workers/award-alerts-notifier.ts",
+"../../../awardsearch/backend/award-alerts/cli.ts",
+"../../../awardsearch/workers/award-alerts-evaluator.ts",
+"../../../awardsearch/workers/award-alerts-notifier.ts",
 ```
 
 Rename the test description so it reflects retired runtime surfaces, not only legacy Alaska files.
@@ -188,7 +188,7 @@ Rename the test description so it reflects retired runtime surfaces, not only le
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/retired-modules.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/retired-modules.test.ts
 ```
 
 Expected:
@@ -199,7 +199,7 @@ Expected:
 Run:
 
 ```bash
-git rm awardwiz/workers/award-alerts-evaluator.ts awardwiz/workers/award-alerts-notifier.ts awardwiz/backend/award-alerts/cli.ts
+git rm awardsearch/workers/award-alerts-evaluator.ts awardsearch/workers/award-alerts-notifier.ts awardsearch/backend/award-alerts/cli.ts
 ```
 
 - [ ] **Step 4: Remove unsupported Justfile command surfaces**
@@ -219,7 +219,7 @@ Also delete the old commented deployment section under `# DEPLOYMENT` because it
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/retired-modules.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/retired-modules.test.ts
 rg -n "award-alerts-cli|run-award-alerts-evaluator|run-award-alerts-notifier|run-alaska-alerts-evaluator|run-alaska-alerts-notifier" Justfile awardwiz docs README.md
 ```
 
@@ -230,7 +230,7 @@ Expected:
 - [ ] **Step 6: Commit Task 2**
 
 ```bash
-git add Justfile test/awardwiz/award-alerts/retired-modules.test.ts awardwiz/workers awardwiz/backend/award-alerts
+git add Justfile test/awardsearch/award-alerts/retired-modules.test.ts awardsearch/workers awardsearch/backend/award-alerts
 git commit -m "Remove retired award alerts runtime entrypoints"
 ```
 
@@ -238,9 +238,9 @@ git commit -m "Remove retired award alerts runtime entrypoints"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-testing.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/testing/award-alerts-testing.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
 
 - [ ] **Step 1: Remove CLI and host-first management language from the README**
 
@@ -253,7 +253,7 @@ Update `README.md` so it:
 
 - [ ] **Step 2: Replace the operations doc’s `systemd` section with container-only guidance**
 
-Rewrite `docs/award-alerts-operations.md` so it:
+Rewrite `docs/operations/award-alerts-operations.md` so it:
 
 - removes the `systemd` service section entirely
 - removes host-first “EnvironmentFile” guidance
@@ -265,8 +265,8 @@ Rewrite `docs/award-alerts-operations.md` so it:
 
 Update:
 
-- `docs/award-alerts-testing.md`
-- `docs/award-alerts-backend-handoff.md`
+- `docs/testing/award-alerts-testing.md`
+- `docs/product/award-alerts-backend-handoff.md`
 
 So they no longer describe:
 
@@ -294,15 +294,15 @@ Expected:
 - [ ] **Step 5: Commit Task 3**
 
 ```bash
-git add README.md docs/award-alerts-operations.md docs/award-alerts-testing.md docs/award-alerts-backend-handoff.md
+git add README.md docs/operations/award-alerts-operations.md docs/testing/award-alerts-testing.md docs/product/award-alerts-backend-handoff.md
 git commit -m "Document API-only and container-only award alerts runtime"
 ```
 
 ## Task 4: Tighten The Docker Runtime Contract
 
 **Files:**
-- Modify: `awardwiz/backend/award-alerts/Dockerfile`
-- Modify: `docs/award-alerts-operations.md`
+- Modify: `awardsearch/backend/award-alerts/Dockerfile`
+- Modify: `docs/operations/award-alerts-operations.md`
 - Modify: `README.md`
 
 - [ ] **Step 1: Update the Dockerfile to make service boot contract explicit**
@@ -310,20 +310,20 @@ git commit -m "Document API-only and container-only award alerts runtime"
 Change the Dockerfile so the final container command:
 
 - ensures the database parent directory exists before boot
-- starts only `dist/awardwiz/workers/award-alerts-service.js`
+- starts only `dist/awardsearch/workers/award-alerts-service.js`
 - keeps the port/env contract explicit
 
 Target command shape:
 
 ```dockerfile
-CMD ["bash", "-lc", "mkdir -p \"$(dirname \"${DATABASE_PATH:-/data/award-alerts.sqlite}\")\" && if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; else node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; fi"]
+CMD ["bash", "-lc", "mkdir -p \"$(dirname \"${DATABASE_PATH:-/data/award-alerts.sqlite}\")\" && if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a node --enable-source-maps dist/awardsearch/workers/award-alerts-service.js; else node --enable-source-maps dist/awardsearch/workers/award-alerts-service.js; fi"]
 ```
 
 Adjust only if needed for shell-quoting correctness.
 
 - [ ] **Step 2: Make the documented Docker flow exact**
 
-In `docs/award-alerts-operations.md` and `README.md`, document:
+In `docs/operations/award-alerts-operations.md` and `README.md`, document:
 
 - exact `docker build`
 - exact `docker run`
@@ -338,8 +338,8 @@ Always run:
 ```bash
 just test
 npm exec tsc -- --noEmit
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 just run-scraper alaska SHA HND 2026-05-02
 ```
 
@@ -352,7 +352,7 @@ If Docker is not available:
 - [ ] **Step 4: Commit Task 4**
 
 ```bash
-git add awardwiz/backend/award-alerts/Dockerfile README.md docs/award-alerts-operations.md docs/award-alerts-testing.md docs/award-alerts-backend-handoff.md Justfile test/awardwiz/award-alerts
+git add awardsearch/backend/award-alerts/Dockerfile README.md docs/operations/award-alerts-operations.md docs/testing/award-alerts-testing.md docs/product/award-alerts-backend-handoff.md Justfile test/awardsearch/award-alerts
 git commit -m "Harden award alerts container runtime"
 ```
 
@@ -368,8 +368,8 @@ Run:
 ```bash
 just test
 npm exec tsc -- --noEmit
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 just run-scraper alaska SHA HND 2026-05-02
 ```
 

@@ -30,6 +30,6 @@
 
     "types": ["node"]
   },
-  "include": ["arkalis", "awardwiz-scrapers", "awardwiz", "test"],
+  "include": ["arkalis", "awardsearch-scrapers", "awardsearch", "test"],
   "exclude": ["node_modules", "dist"]
 }

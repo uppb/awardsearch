@@ -5,7 +5,7 @@
 
 </center>
 
-Arkalis is AwardWiz's internal Chromium automation layer. It exists to run airline scrapers with tighter control over network behavior, browser state, and anti-botting tradeoffs than the project wanted from Puppeteer- or Playwright-style abstractions.
+Arkalis is AwardSearch's internal Chromium automation layer. It exists to run airline scrapers with tighter control over network behavior, browser state, and anti-botting tradeoffs than the project wanted from Puppeteer- or Playwright-style abstractions.
 
 ## What It Provides
 

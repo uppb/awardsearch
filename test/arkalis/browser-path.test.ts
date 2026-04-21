@@ -14,14 +14,24 @@ describe("chrome path resolution", () => {
 
     await expect(resolveChromePath({
       env,
-      access: async () => undefined,
-      readdir: async () => [],
+      access: async () => {
+        await Promise.resolve()
+      },
+      readdir: async () => {
+        await Promise.resolve()
+        return []
+      },
     })).resolves.toBe("/custom/chrome")
 
     await expect(ensureChromePath({
       env,
-      access: async () => undefined,
-      readdir: async () => [],
+      access: async () => {
+        await Promise.resolve()
+      },
+      readdir: async () => {
+        await Promise.resolve()
+        return []
+      },
     })).resolves.toBe("/custom/chrome")
 
     expect(env.CHROME_PATH).toBe("/custom/chrome")
@@ -39,10 +49,14 @@ describe("chrome path resolution", () => {
     await expect(resolveChromePath({
       env,
       access: async (targetPath: string) => {
+        await Promise.resolve()
         if (!accessible.has(targetPath))
           throw new Error("missing")
       },
-      readdir: async () => [],
+      readdir: async () => {
+        await Promise.resolve()
+        return []
+      },
     })).resolves.toBe("/usr/bin/chromium")
   })
 
@@ -54,12 +68,14 @@ describe("chrome path resolution", () => {
     await expect(resolveChromePath({
       env,
       access: async (targetPath: string) => {
+        await Promise.resolve()
         if (targetPath === "/ms-playwright")
           return
 
         throw new Error("missing")
       },
       readdir: async (targetPath: string) => {
+        await Promise.resolve()
         switch (targetPath) {
           case "/ms-playwright":
             return [{ name: "chromium-1208", isDirectory: () => true, isFile: () => false }]
@@ -80,15 +96,20 @@ describe("chrome path resolution", () => {
         PATH: "/usr/local/bin:/usr/bin",
       },
       access: async () => {
+        await Promise.resolve()
         throw new Error("missing")
       },
-      readdir: async () => [],
+      readdir: async () => {
+        await Promise.resolve()
+        return []
+      },
     })).resolves.toBeUndefined()
   })
 
   it("searches the Playwright cache recursively for a chrome binary", async () => {
     await expect(findChromePathInPlaywrightCache("/ms-playwright", {
       readdir: async (targetPath: string) => {
+        await Promise.resolve()
         switch (targetPath) {
           case "/ms-playwright":
             return [{ name: "shared", isDirectory: () => true, isFile: () => false }]

@@ -3,7 +3,7 @@
   "scripts": {
     "prepare": "husky install"
   },
-  "name": "awardwiz",
+  "name": "awardsearch",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/bezier-js": "^4.1.0",

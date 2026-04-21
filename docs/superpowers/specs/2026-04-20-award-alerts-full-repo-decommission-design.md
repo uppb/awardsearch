@@ -35,9 +35,9 @@ This cleanup should be done in phases so the repo stays buildable and documented
 
 The intended product direction is already documented in:
 
-- `docs/award-alerts-backend-handoff.md`
-- `docs/award-alerts-api.md`
-- `docs/award-alerts-operations.md`
+- `docs/product/award-alerts-backend-handoff.md`
+- `docs/api/award-alerts-api.md`
+- `docs/operations/award-alerts-operations.md`
 - `README.md`
 
 Those docs now describe the repo as hosting an internal admin/service backend with:
@@ -54,10 +54,10 @@ The main source of repo incoherence is that older frontend/Firebase/search infra
 
 After cleanup, the repo should primarily contain:
 
-- `awardwiz/backend/award-alerts/`
-- `awardwiz/workers/award-alerts-*.ts`
-- `awardwiz-scrapers/scrapers/`
-- `awardwiz-scrapers/main-debug.ts`
+- `awardsearch/backend/award-alerts/`
+- `awardsearch/workers/award-alerts-*.ts`
+- `awardsearch-scrapers/scrapers/`
+- `awardsearch-scrapers/main-debug.ts`
 - `arkalis/`
 - backend/provider tests
 - backend/service docs
@@ -73,14 +73,14 @@ Purpose:
 - eliminate old runtime surfaces that overlap with the new admin API
 
 Likely removals:
-- `awardwiz-scrapers/main-server.ts`
+- `awardsearch-scrapers/main-server.ts`
 - frontend/browser auth request path that only exists to call that server
 - legacy alias commands using old Alaska alert naming
 - GitHub Actions/runtime-note remnants that preserve old naming if no longer useful
 
 Expected replacement path:
 - `POST /api/award-alerts/operations/run-scraper`
-- `awardwiz-scrapers/main-debug.ts`
+- `awardsearch-scrapers/main-debug.ts`
 
 Acceptance criteria:
 - backend service tests still pass
@@ -92,9 +92,9 @@ Purpose:
 - remove the old Firestore/email alerting system that coexists with `award-alerts`
 
 Likely removals:
-- `awardwiz/workers/marked-fares.ts`
-- `awardwiz/workers/preview-email.ts`
-- `awardwiz/emails/notification.html`
+- `awardsearch/workers/marked-fares.ts`
+- `awardsearch/workers/preview-email.ts`
+- `awardsearch/emails/notification.html`
 - Firestore rules/config files
 - marked-fares GitHub Actions workflow
 - marked-fare UI behavior in the old frontend
@@ -114,13 +114,13 @@ Purpose:
 - retire the old React/Vite/Firebase search application entirely
 
 Likely removals:
-- `awardwiz/main.tsx`
-- `awardwiz/components/*`
-- `awardwiz/hooks/*`
-- `awardwiz/helpers/firebase.ts`
-- `awardwiz/helpers/runScraper.ts`
-- `awardwiz/index.html`
-- `awardwiz/index.css`
+- `awardsearch/main.tsx`
+- `awardsearch/components/*`
+- `awardsearch/hooks/*`
+- `awardsearch/helpers/firebase.ts`
+- `awardsearch/helpers/runScraper.ts`
+- `awardsearch/index.html`
+- `awardsearch/index.css`
 - GitHub Pages deployment workflow
 - frontend-focused assets and tests that no longer serve the backend
 
@@ -158,10 +158,10 @@ Acceptance criteria:
 
 ### Keep
 
-- `awardwiz/backend/award-alerts/*`
-- `awardwiz/workers/award-alerts-*`
-- `awardwiz-scrapers/scrapers/*`
-- `awardwiz-scrapers/main-debug.ts`
+- `awardsearch/backend/award-alerts/*`
+- `awardsearch/workers/award-alerts-*`
+- `awardsearch-scrapers/scrapers/*`
+- `awardsearch-scrapers/main-debug.ts`
 - `arkalis/*`
 - backend/provider tests
 - award-alerts docs and Docker/runtime support
@@ -177,8 +177,8 @@ Acceptance criteria:
 
 ### Evaluate during execution
 
-- `awardwiz/airports.json`
-- `awardwiz/workers/gen-statics.ts`
+- `awardsearch/airports.json`
+- `awardsearch/workers/gen-statics.ts`
 - frontend-only tests/debug-tree leftovers
 - frontend Vite configuration
 - old runtime-note workflows whose only purpose was migration signaling
@@ -223,14 +223,14 @@ The repo should stop implying that any browser product or Firebase worker cadenc
 
 Every cleanup phase must update:
 
-- `docs/award-alerts-backend-handoff.md`
+- `docs/product/award-alerts-backend-handoff.md`
 - `README.md`
 
 And when API/runtime/operator behavior changes, also update:
 
-- `docs/award-alerts-api.md`
-- `docs/award-alerts-operations.md`
-- `docs/award-alerts-testing.md`
+- `docs/api/award-alerts-api.md`
+- `docs/operations/award-alerts-operations.md`
+- `docs/testing/award-alerts-testing.md`
 
 The handoff doc remains the source of truth for:
 
@@ -261,8 +261,8 @@ Each phase should run the smallest verification set that proves the remaining re
 Core expected checks during execution:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 ```
 

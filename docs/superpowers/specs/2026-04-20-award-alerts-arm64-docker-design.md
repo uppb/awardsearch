@@ -15,9 +15,9 @@ This is a deployment/runtime refresh, not an application redesign.
 
 The repo is already simplified around the backend service:
 
-- `awardwiz/backend/award-alerts/` contains the service runtime, API, repository, and provider logic
-- `awardwiz/workers/award-alerts-service.ts` is the only supported production entrypoint
-- `awardwiz/backend/award-alerts/Dockerfile` currently uses `mcr.microsoft.com/playwright:v1.32.0`
+- `awardsearch/backend/award-alerts/` contains the service runtime, API, repository, and provider logic
+- `awardsearch/workers/award-alerts-service.ts` is the only supported production entrypoint
+- `awardsearch/backend/award-alerts/Dockerfile` currently uses `mcr.microsoft.com/playwright:v1.32.0`
 - the service still depends on Chromium and X-compatible headless execution through `CHROME_PATH` and `xvfb-run`
 
 The current Dockerfile works for the existing service model, but the base image is old and should not be treated as an intentional `arm64`-capable production target.
@@ -82,7 +82,7 @@ Cons:
 
 No application-level boundary changes:
 
-- keep `awardwiz/workers/award-alerts-service.ts` as the service entrypoint
+- keep `awardsearch/workers/award-alerts-service.ts` as the service entrypoint
 - keep the current HTTP API surface unchanged
 - keep the same SQLite path semantics
 - keep direct provider-backed scraping inside the service container
@@ -110,7 +110,7 @@ The intended and documented production model should remain:
 
 The following docs must be updated as part of this work:
 
-### `docs/award-alerts-backend-handoff.md`
+### `docs/product/award-alerts-backend-handoff.md`
 
 Update the handoff to say:
 
@@ -118,7 +118,7 @@ Update the handoff to say:
 - `amd64` and `arm64` are intended supported architectures
 - the Playwright-based browser image remains part of the runtime contract
 
-### `docs/award-alerts-operations.md`
+### `docs/operations/award-alerts-operations.md`
 
 Add concrete Docker commands for:
 

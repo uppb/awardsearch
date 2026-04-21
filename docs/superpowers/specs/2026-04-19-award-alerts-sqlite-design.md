@@ -10,7 +10,7 @@ Scope: Generic SQLite-backed award alerts on one persistent server
 
 Current model:
 
-- generic runtime surface under `awardwiz/backend/award-alerts/` and `awardwiz/workers/award-alerts-*.ts`
+- generic runtime surface under `awardsearch/backend/award-alerts/` and `awardsearch/workers/award-alerts-*.ts`
 - SQLite as the source of truth
 - CLI-only alert administration
 - one persistent server as the intended production runtime
@@ -21,7 +21,7 @@ Current model:
 
 ### CLI
 
-`awardwiz/backend/award-alerts/cli.ts` is the operational entrypoint for alert management.
+`awardsearch/backend/award-alerts/cli.ts` is the operational entrypoint for alert management.
 
 Supported operations:
 
@@ -36,7 +36,7 @@ The CLI writes directly to the shared SQLite repository. There is no frontend CR
 
 ### Evaluator worker
 
-`awardwiz/workers/award-alerts-evaluator.ts`:
+`awardsearch/workers/award-alerts-evaluator.ts`:
 
 1. opens `DATABASE_PATH` unless a repository is injected
 2. claims due alerts through the generic scheduler helper
@@ -49,7 +49,7 @@ The exported `runEvaluatorWorker(...)` function is intentionally testable with i
 
 ### Notifier worker
 
-`awardwiz/workers/award-alerts-notifier.ts`:
+`awardsearch/workers/award-alerts-notifier.ts`:
 
 1. requires `DISCORD_WEBHOOK_URL` unless a webhook URL is injected
 2. opens `DATABASE_PATH` unless a repository is injected

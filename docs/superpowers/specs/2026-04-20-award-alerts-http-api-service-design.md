@@ -11,8 +11,8 @@ Scope: Convert `award-alerts` from a CLI-managed backend into a single-container
 This design keeps the existing backend boundaries that are already working:
 
 - SQLite remains the durable store and claim mechanism
-- `awardwiz/backend/award-alerts/evaluator.ts` remains the evaluation core
-- `awardwiz/backend/award-alerts/notifier.ts` remains the notification core
+- `awardsearch/backend/award-alerts/evaluator.ts` remains the evaluation core
+- `awardsearch/backend/award-alerts/notifier.ts` remains the notification core
 - Alaska remains the first provider
 
 The new work adds an HTTP/service layer above those modules instead of reshaping the provider runtime.
@@ -25,7 +25,7 @@ The new work adds an HTTP/service layer above those modules instead of reshaping
 - keep `userId` optional for future flexibility, but do not require it in the first API
 - preserve the existing at-most-once Discord notification behavior
 - establish structured API documentation for future engineers
-- require `docs/award-alerts-backend-handoff.md` to be updated on every meaningful backend/API change
+- require `docs/product/award-alerts-backend-handoff.md` to be updated on every meaningful backend/API change
 
 ## Non-Goals
 
@@ -40,11 +40,11 @@ The new work adds an HTTP/service layer above those modules instead of reshaping
 
 The current backend already has a good internal split:
 
-- `awardwiz/backend/award-alerts/cli.ts` is a thin management wrapper
-- `awardwiz/backend/award-alerts/sqlite-repository.ts` owns persistence and claim semantics
-- `awardwiz/backend/award-alerts/evaluator.ts` owns match evaluation and event creation
-- `awardwiz/backend/award-alerts/notifier.ts` owns Discord delivery semantics
-- `awardwiz/workers/award-alerts-evaluator.ts` and `awardwiz/workers/award-alerts-notifier.ts` are thin runtime entrypoints
+- `awardsearch/backend/award-alerts/cli.ts` is a thin management wrapper
+- `awardsearch/backend/award-alerts/sqlite-repository.ts` owns persistence and claim semantics
+- `awardsearch/backend/award-alerts/evaluator.ts` owns match evaluation and event creation
+- `awardsearch/backend/award-alerts/notifier.ts` owns Discord delivery semantics
+- `awardsearch/workers/award-alerts-evaluator.ts` and `awardsearch/workers/award-alerts-notifier.ts` are thin runtime entrypoints
 
 This means the clean extension point is a new service layer above the repository and workflow units, not a rewrite of the provider/runtime internals.
 
@@ -112,20 +112,20 @@ The first API should be internal, admin-oriented, JSON-only, and unauthenticated
 
 The existing modules should remain in place:
 
-- `awardwiz/backend/award-alerts/types.ts`
-- `awardwiz/backend/award-alerts/sqlite.ts`
-- `awardwiz/backend/award-alerts/sqlite-repository.ts`
-- `awardwiz/backend/award-alerts/date-scope.ts`
-- `awardwiz/backend/award-alerts/evaluator.ts`
-- `awardwiz/backend/award-alerts/notifier.ts`
+- `awardsearch/backend/award-alerts/types.ts`
+- `awardsearch/backend/award-alerts/sqlite.ts`
+- `awardsearch/backend/award-alerts/sqlite-repository.ts`
+- `awardsearch/backend/award-alerts/date-scope.ts`
+- `awardsearch/backend/award-alerts/evaluator.ts`
+- `awardsearch/backend/award-alerts/notifier.ts`
 
 New modules should be added above them:
 
-- `awardwiz/backend/award-alerts/server.ts` or `api.ts`
-- `awardwiz/backend/award-alerts/http-handlers.ts`
-- `awardwiz/backend/award-alerts/service.ts`
-- `awardwiz/backend/award-alerts/validation.ts`
-- `awardwiz/backend/award-alerts/loop-runner.ts`
+- `awardsearch/backend/award-alerts/server.ts` or `api.ts`
+- `awardsearch/backend/award-alerts/http-handlers.ts`
+- `awardsearch/backend/award-alerts/service.ts`
+- `awardsearch/backend/award-alerts/validation.ts`
+- `awardsearch/backend/award-alerts/loop-runner.ts`
 
 Expected responsibilities:
 
@@ -209,7 +209,7 @@ The API and runtime should be documented in three separate layers:
 
 File:
 
-- `docs/award-alerts-backend-handoff.md`
+- `docs/product/award-alerts-backend-handoff.md`
 
 Purpose:
 
@@ -226,7 +226,7 @@ Rule:
 
 File:
 
-- `docs/award-alerts-api.md`
+- `docs/api/award-alerts-api.md`
 
 Purpose:
 
@@ -240,7 +240,7 @@ Purpose:
 
 File:
 
-- `awardwiz/backend/award-alerts/openapi.json` or `openapi.yaml`
+- `awardsearch/backend/award-alerts/openapi.json` or `openapi.yaml`
 
 Purpose:
 
@@ -250,8 +250,8 @@ Purpose:
 Documentation update rules:
 
 - OpenAPI changes whenever routes or payloads change
-- `docs/award-alerts-api.md` changes whenever API behavior changes
-- `docs/award-alerts-backend-handoff.md` changes whenever backend functionality, runtime shape, or recommended next steps change
+- `docs/api/award-alerts-api.md` changes whenever API behavior changes
+- `docs/product/award-alerts-backend-handoff.md` changes whenever backend functionality, runtime shape, or recommended next steps change
 
 ## Testing Expectations
 
@@ -262,7 +262,7 @@ Implementation should verify:
 - HTTP handler coverage for CRUD, operational endpoints, and error shapes
 - loop-runner coverage for single-active-run behavior
 - existing evaluator/notifier tests remain green
-- `npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts`
+- `npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts`
 - `npm exec tsc -- --noEmit`
 
 ## Recommended Next Steps

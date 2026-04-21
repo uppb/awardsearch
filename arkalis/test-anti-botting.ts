@@ -1,5 +1,5 @@
 // This file is run directly. Example:
-//   docker run -it --rm awardwiz:scrapers node dist/arkalis/test-anti-botting.js
+//   docker run -it --rm awardsearch:scrapers node dist/arkalis/test-anti-botting.js
 
 /* eslint-disable no-console */
 import { DebugOptions, runArkalis } from "./arkalis.js"

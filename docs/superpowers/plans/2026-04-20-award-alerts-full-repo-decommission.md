@@ -14,52 +14,55 @@
 
 ### Surviving product surface
 
-- Keep: `awardwiz/backend/award-alerts/*`
-- Keep: `awardwiz/workers/award-alerts-*.ts`
-- Keep: `awardwiz-scrapers/scrapers/*`
-- Keep: `awardwiz-scrapers/main-debug.ts`
+- Keep: `awardsearch/backend/award-alerts/*`
+- Keep: `awardsearch/workers/award-alerts-*.ts`
+- Keep: `awardsearch-scrapers/scrapers/*`
+- Keep: `awardsearch-scrapers/main-debug.ts`
 - Keep: `arkalis/*`
-- Keep: `docs/award-alerts-*.md`
+- Keep: `docs/api/award-alerts-api.md`
+- Keep: `docs/operations/award-alerts-operations.md`
+- Keep: `docs/testing/award-alerts-testing.md`
+- Keep: `docs/product/award-alerts-backend-handoff.md`
 
 ### Phase 1 removal candidates
 
-- Remove: `awardwiz-scrapers/main-server.ts`
-- Remove: `awardwiz/helpers/runScraper.ts`
-- Remove: `awardwiz/helpers/firebase.ts` if no Phase 1 survivor still imports it
+- Remove: `awardsearch-scrapers/main-server.ts`
+- Remove: `awardsearch/helpers/runScraper.ts`
+- Remove: `awardsearch/helpers/firebase.ts` if no Phase 1 survivor still imports it
 - Modify: `Justfile`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
-- Modify: `docs/award-alerts-operations.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
 - Modify: `.github/workflows/alaska-alerts-worker.yaml`
 
 ### Phase 2 removal candidates
 
-- Remove: `awardwiz/workers/marked-fares.ts`
-- Remove: `awardwiz/workers/preview-email.ts`
-- Remove: `awardwiz/emails/notification.html`
-- Remove: `awardwiz/firebase.json`
-- Remove: `awardwiz/firestore.rules`
-- Remove: `awardwiz/firestore.indexes.json`
+- Remove: `awardsearch/workers/marked-fares.ts`
+- Remove: `awardsearch/workers/preview-email.ts`
+- Remove: `awardsearch/emails/notification.html`
+- Remove: `awardsearch/firebase.json`
+- Remove: `awardsearch/firestore.rules`
+- Remove: `awardsearch/firestore.indexes.json`
 - Remove: `.github/workflows/marked-fares-worker.yaml`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-testing.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/testing/award-alerts-testing.md`
 
 ### Phase 3 removal candidates
 
-- Remove: `awardwiz/main.tsx`
-- Remove: `awardwiz/index.html`
-- Remove: `awardwiz/index.css`
-- Remove: `awardwiz/components/*`
-- Remove: `awardwiz/hooks/*`
-- Remove: `awardwiz/test/DebugTree.test.tsx`
+- Remove: `awardsearch/main.tsx`
+- Remove: `awardsearch/index.html`
+- Remove: `awardsearch/index.css`
+- Remove: `awardsearch/components/*`
+- Remove: `awardsearch/hooks/*`
+- Remove: `awardsearch/test/DebugTree.test.tsx`
 - Remove: `.github/workflows/github-pages.yml`
-- Remove or evaluate: `awardwiz/airports.json`
-- Remove or evaluate: `awardwiz/workers/gen-statics.ts`
-- Remove or evaluate: `awardwiz/vite.config.ts`, `awardwiz/vite-env.d.ts`
+- Remove or evaluate: `awardsearch/airports.json`
+- Remove or evaluate: `awardsearch/workers/gen-statics.ts`
+- Remove or evaluate: `awardsearch/vite.config.ts`, `awardsearch/vite-env.d.ts`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
 
 ### Phase 4 consolidation candidates
 
@@ -68,17 +71,17 @@
 - Modify: `Justfile`
 - Modify: `.github/workflows/commit-tests.yaml`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-testing.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/testing/award-alerts-testing.md`
 
 ## Verification Baseline
 
 Run these after any phase that touches the backend or scraper path:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 ```
 
@@ -110,15 +113,15 @@ curl -sS -X POST http://127.0.0.1:2233/api/award-alerts/operations/preview \
 ## Task 1: Remove legacy operator overlap
 
 **Files:**
-- Remove: `awardwiz-scrapers/main-server.ts`
-- Remove: `awardwiz/helpers/runScraper.ts`
+- Remove: `awardsearch-scrapers/main-server.ts`
+- Remove: `awardsearch/helpers/runScraper.ts`
 - Modify: `Justfile`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
-- Modify: `docs/award-alerts-operations.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
 - Remove or rewrite: `.github/workflows/alaska-alerts-worker.yaml`
-- Test: `test/awardwiz/award-alerts/*.test.ts`
-- Test: `test/awardwiz/award-alerts/providers/alaska/*.test.ts`
+- Test: `test/awardsearch/award-alerts/*.test.ts`
+- Test: `test/awardsearch/award-alerts/providers/alaska/*.test.ts`
 
 - [ ] **Step 1: Confirm nothing in the surviving backend still imports the browser-facing scraper server path**
 
@@ -130,7 +133,7 @@ rg -n "main-server|runScraper\\(|helpers/runScraper|SERVICE_WORKER_JWT_SECRET|ex
 
 Expected:
 - imports should be confined to the retiring browser/frontend/server surface
-- no `awardwiz/backend/award-alerts/*` runtime file should depend on `awardwiz-scrapers/main-server.ts`
+- no `awardsearch/backend/award-alerts/*` runtime file should depend on `awardsearch-scrapers/main-server.ts`
 
 - [ ] **Step 2: Write or update a regression test only if removing the old surface requires protecting a surviving contract**
 
@@ -145,7 +148,7 @@ it("keeps the raw scraper validation endpoint as the supported operator path", a
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/api.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/api.test.ts
 ```
 
 Expected:
@@ -156,7 +159,7 @@ Expected:
 Run:
 
 ```bash
-git rm awardwiz-scrapers/main-server.ts awardwiz/helpers/runScraper.ts
+git rm awardsearch-scrapers/main-server.ts awardsearch/helpers/runScraper.ts
 ```
 
 Then update `Justfile` and docs so `run-award-alerts-service`, `run-scraper`, and `POST /api/award-alerts/operations/run-scraper` are the documented operator paths.
@@ -176,8 +179,8 @@ If a migration note is still useful, replace it with docs references in `README.
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 ```
 
@@ -207,24 +210,24 @@ Expected:
 - [ ] **Step 7: Commit Phase 1**
 
 ```bash
-git add Justfile README.md docs/award-alerts-backend-handoff.md docs/award-alerts-operations.md .github/workflows awardwiz-scrapers/main-server.ts awardwiz/helpers/runScraper.ts
+git add Justfile README.md docs/product/award-alerts-backend-handoff.md docs/operations/award-alerts-operations.md .github/workflows awardsearch-scrapers/main-server.ts awardsearch/helpers/runScraper.ts
 git commit -m "Remove legacy scraper server operator path"
 ```
 
 ## Task 2: Remove marked-fares and email/Firebase alert remnants
 
 **Files:**
-- Remove: `awardwiz/workers/marked-fares.ts`
-- Remove: `awardwiz/workers/preview-email.ts`
-- Remove: `awardwiz/emails/notification.html`
-- Remove: `awardwiz/firebase.json`
-- Remove: `awardwiz/firestore.rules`
-- Remove: `awardwiz/firestore.indexes.json`
+- Remove: `awardsearch/workers/marked-fares.ts`
+- Remove: `awardsearch/workers/preview-email.ts`
+- Remove: `awardsearch/emails/notification.html`
+- Remove: `awardsearch/firebase.json`
+- Remove: `awardsearch/firestore.rules`
+- Remove: `awardsearch/firestore.indexes.json`
 - Remove: `.github/workflows/marked-fares-worker.yaml`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-testing.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/testing/award-alerts-testing.md`
 
 - [ ] **Step 1: Confirm marked-fares/email/Firebase-admin usage is isolated to retiring paths**
 
@@ -242,20 +245,20 @@ Expected:
 Run:
 
 ```bash
-git rm awardwiz/workers/marked-fares.ts awardwiz/workers/preview-email.ts awardwiz/emails/notification.html awardwiz/firebase.json awardwiz/firestore.rules awardwiz/firestore.indexes.json .github/workflows/marked-fares-worker.yaml
+git rm awardsearch/workers/marked-fares.ts awardsearch/workers/preview-email.ts awardsearch/emails/notification.html awardsearch/firebase.json awardsearch/firestore.rules awardsearch/firestore.indexes.json .github/workflows/marked-fares-worker.yaml
 ```
 
 - [ ] **Step 3: Remove doc references that still describe marked-fares as a living feature**
 
-Update `README.md` and `docs/award-alerts-backend-handoff.md` so marked-fares is no longer framed as a coexisting runtime. Replace with a brief note that the legacy system has been retired.
+Update `README.md` and `docs/product/award-alerts-backend-handoff.md` so marked-fares is no longer framed as a coexisting runtime. Replace with a brief note that the legacy system has been retired.
 
 - [ ] **Step 4: Run verification**
 
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 ```
 
@@ -265,25 +268,25 @@ Expected:
 - [ ] **Step 5: Commit Phase 2**
 
 ```bash
-git add README.md docs/award-alerts-backend-handoff.md docs/award-alerts-operations.md docs/award-alerts-testing.md .github/workflows awardwiz/workers awardwiz/emails awardwiz/firebase.json awardwiz/firestore.rules awardwiz/firestore.indexes.json
+git add README.md docs/product/award-alerts-backend-handoff.md docs/operations/award-alerts-operations.md docs/testing/award-alerts-testing.md .github/workflows awardsearch/workers awardsearch/emails awardsearch/firebase.json awardsearch/firestore.rules awardsearch/firestore.indexes.json
 git commit -m "Remove legacy marked-fares and email alerting"
 ```
 
 ## Task 3: Remove the browser search product
 
 **Files:**
-- Remove: `awardwiz/main.tsx`
-- Remove: `awardwiz/index.html`
-- Remove: `awardwiz/index.css`
-- Remove: `awardwiz/components/*`
-- Remove: `awardwiz/hooks/*`
-- Remove: `awardwiz/test/DebugTree.test.tsx`
+- Remove: `awardsearch/main.tsx`
+- Remove: `awardsearch/index.html`
+- Remove: `awardsearch/index.css`
+- Remove: `awardsearch/components/*`
+- Remove: `awardsearch/hooks/*`
+- Remove: `awardsearch/test/DebugTree.test.tsx`
 - Remove: `.github/workflows/github-pages.yml`
-- Evaluate: `awardwiz/airports.json`
-- Evaluate: `awardwiz/workers/gen-statics.ts`
-- Evaluate: `awardwiz/vite.config.ts`
+- Evaluate: `awardsearch/airports.json`
+- Evaluate: `awardsearch/workers/gen-statics.ts`
+- Evaluate: `awardsearch/vite.config.ts`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
 
 - [ ] **Step 1: Confirm the old browser app no longer provides a required backend path**
 
@@ -301,11 +304,11 @@ Expected:
 Run:
 
 ```bash
-git rm -r awardwiz/components awardwiz/hooks
-git rm awardwiz/main.tsx awardwiz/index.html awardwiz/index.css awardwiz/test/DebugTree.test.tsx .github/workflows/github-pages.yml
+git rm -r awardsearch/components awardsearch/hooks
+git rm awardsearch/main.tsx awardsearch/index.html awardsearch/index.css awardsearch/test/DebugTree.test.tsx .github/workflows/github-pages.yml
 ```
 
-- [ ] **Step 3: Decide whether `awardwiz/airports.json`, `awardwiz/workers/gen-statics.ts`, and `awardwiz/vite.config.ts` still serve the backend**
+- [ ] **Step 3: Decide whether `awardsearch/airports.json`, `awardsearch/workers/gen-statics.ts`, and `awardsearch/vite.config.ts` still serve the backend**
 
 Run:
 
@@ -329,8 +332,8 @@ Remove or rewrite:
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 just run-scraper alaska SHA HND 2026-05-02
 ```
@@ -341,7 +344,7 @@ Expected:
 - [ ] **Step 6: Commit Phase 3**
 
 ```bash
-git add README.md docs/award-alerts-backend-handoff.md .github/workflows awardwiz
+git add README.md docs/product/award-alerts-backend-handoff.md .github/workflows awardsearch
 git commit -m "Remove retired browser search product"
 ```
 
@@ -353,9 +356,9 @@ git commit -m "Remove retired browser search product"
 - Modify: `Justfile`
 - Modify: `.github/workflows/commit-tests.yaml`
 - Modify: `README.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-testing.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/testing/award-alerts-testing.md`
 
 - [ ] **Step 1: Inventory remaining dependency usage after code removal**
 
@@ -404,15 +407,15 @@ Update `.github/workflows/commit-tests.yaml` so it validates only the remaining 
 - the scraper internals that support it
 - the intended runtime model
 
-`docs/award-alerts-backend-handoff.md` should no longer frame the repo as a transitional dual-product branch.
+`docs/product/award-alerts-backend-handoff.md` should no longer frame the repo as a transitional dual-product branch.
 
 - [ ] **Step 6: Run final verification**
 
 Run:
 
 ```bash
-npm exec -- vitest run test/awardwiz/award-alerts/*.test.ts
-npm exec -- vitest run test/awardwiz/award-alerts/providers/alaska/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/*.test.ts
+npm exec -- vitest run test/awardsearch/award-alerts/providers/alaska/*.test.ts
 npm exec tsc -- --noEmit
 just run-scraper alaska SHA HND 2026-05-02
 ```
@@ -443,7 +446,7 @@ Expected:
 - [ ] **Step 7: Commit Phase 4**
 
 ```bash
-git add package.json package-lock.json Justfile .github/workflows README.md docs/award-alerts-backend-handoff.md docs/award-alerts-operations.md docs/award-alerts-testing.md
+git add package.json package-lock.json Justfile .github/workflows README.md docs/product/award-alerts-backend-handoff.md docs/operations/award-alerts-operations.md docs/testing/award-alerts-testing.md
 git commit -m "Consolidate repo around award alerts backend"
 ```
 

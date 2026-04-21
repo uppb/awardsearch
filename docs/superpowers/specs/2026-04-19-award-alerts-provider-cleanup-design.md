@@ -6,14 +6,14 @@ Scope: finish the Alaska provider migration under `award-alerts`, add persistent
 
 ## Summary
 
-The generic `award-alerts` backend is the active runtime, but it still depends on the older `awardwiz/backend/alaska-alerts/` boundary for Alaska-specific search and match logic.
+The generic `award-alerts` backend is the active runtime, but it still depends on the older `awardsearch/backend/alaska-alerts/` boundary for Alaska-specific search and match logic.
 
 This design finishes that migration and documents the intended single-server runtime.
 
 Goals:
 
-- move the remaining active Alaska alert logic under `awardwiz/backend/award-alerts/providers/alaska/`
-- retire the old `awardwiz/backend/alaska-alerts/` boundary cleanly
+- move the remaining active Alaska alert logic under `awardsearch/backend/award-alerts/providers/alaska/`
+- retire the old `awardsearch/backend/alaska-alerts/` boundary cleanly
 - document `systemd` as the canonical production runtime for the SQLite + Discord backend
 - change backend CLI defaults so new alerts scrape every `1` minute and re-notify no more often than every `10` minutes
 
@@ -33,8 +33,8 @@ This leaves the next engineer with an unclear ownership boundary and leaves oper
 
 The generic Alaska provider should become self-contained under:
 
-- `awardwiz/backend/award-alerts/providers/alaska/search.ts`
-- `awardwiz/backend/award-alerts/providers/alaska/matcher.ts`
+- `awardsearch/backend/award-alerts/providers/alaska/search.ts`
+- `awardsearch/backend/award-alerts/providers/alaska/matcher.ts`
 
 That provider folder should own:
 
@@ -45,9 +45,9 @@ That provider folder should own:
 
 After the move, generic runtime code should import only from:
 
-- `awardwiz/backend/award-alerts/providers/alaska/*`
+- `awardsearch/backend/award-alerts/providers/alaska/*`
 
-The old `awardwiz/backend/alaska-alerts/` boundary should then be removed if no active imports remain.
+The old `awardsearch/backend/alaska-alerts/` boundary should then be removed if no active imports remain.
 
 ### 2. Operator docs
 
@@ -93,15 +93,15 @@ This change applies to newly created alerts through the CLI default behavior. It
 
 Expected code changes:
 
-- `awardwiz/backend/award-alerts/providers/alaska/search.ts`
+- `awardsearch/backend/award-alerts/providers/alaska/search.ts`
   - own the Alaska search wrapper directly instead of forwarding to legacy modules
-- `awardwiz/backend/award-alerts/providers/alaska/matcher.ts`
+- `awardsearch/backend/award-alerts/providers/alaska/matcher.ts`
   - own the Alaska match adapter directly instead of forwarding to legacy modules
-- `awardwiz/backend/award-alerts/cli.ts`
+- `awardsearch/backend/award-alerts/cli.ts`
   - change default intervals to `1` and `10`
-- `awardwiz/workers/award-alerts-evaluator.ts`
+- `awardsearch/workers/award-alerts-evaluator.ts`
   - no behavior change expected beyond import cleanup
-- `awardwiz/backend/alaska-alerts/*`
+- `awardsearch/backend/alaska-alerts/*`
   - delete once no longer needed
 
 Expected test changes:
@@ -112,9 +112,9 @@ Expected test changes:
 
 Expected docs:
 
-- new operator doc, likely `docs/award-alerts-operations.md`
+- new operator doc, likely `docs/operations/award-alerts-operations.md`
 - update `README.md`
-- update `docs/award-alerts-backend-handoff.md`
+- update `docs/product/award-alerts-backend-handoff.md`
 
 ## Non-Goals
 

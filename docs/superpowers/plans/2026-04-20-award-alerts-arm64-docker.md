@@ -12,12 +12,12 @@
 
 ## File Map
 
-- Modify: `awardwiz/backend/award-alerts/Dockerfile`
+- Modify: `awardsearch/backend/award-alerts/Dockerfile`
   - Replace the legacy Playwright base image with a modern tag intended to support `amd64` and `arm64`.
   - Keep the current service startup contract and browser path behavior aligned with the chosen image.
-- Modify: `docs/award-alerts-operations.md`
+- Modify: `docs/operations/award-alerts-operations.md`
   - Document `docker buildx` and `docker run` commands for both target architectures.
-- Modify: `docs/award-alerts-backend-handoff.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
   - Record the architecture support decision and current deployment model.
 - Modify: `README.md`
   - Keep the high-level production story concise and architecture-aware.
@@ -25,14 +25,14 @@
 ## Task 1: Refresh the Docker Base Image
 
 **Files:**
-- Modify: `awardwiz/backend/award-alerts/Dockerfile`
+- Modify: `awardsearch/backend/award-alerts/Dockerfile`
 
 - [ ] **Step 1: Inspect the current Dockerfile before editing**
 
 Run:
 
 ```bash
-sed -n '1,220p' awardwiz/backend/award-alerts/Dockerfile
+sed -n '1,220p' awardsearch/backend/award-alerts/Dockerfile
 ```
 
 Expected: the file shows `FROM mcr.microsoft.com/playwright:v1.32.0`, `CHROME_PATH=/ms-playwright/chromium-1055/chrome-linux/chrome`, and the existing service startup command.
@@ -71,7 +71,7 @@ Important:
 Keep the command structure in this shape:
 
 ```Dockerfile
-CMD ["bash", "-lc", "mkdir -p \"$(dirname \"${DATABASE_PATH:-/data/award-alerts.sqlite}\")\" && if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then exec xvfb-run -a node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; else exec node --enable-source-maps dist/awardwiz/workers/award-alerts-service.js; fi"]
+CMD ["bash", "-lc", "mkdir -p \"$(dirname \"${DATABASE_PATH:-/data/award-alerts.sqlite}\")\" && if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then exec xvfb-run -a node --enable-source-maps dist/awardsearch/workers/award-alerts-service.js; else exec node --enable-source-maps dist/awardsearch/workers/award-alerts-service.js; fi"]
 ```
 
 Expected: the image still boots the unified service, still creates the DB parent directory, and still uses the existing `xvfb-run` fallback.
@@ -81,7 +81,7 @@ Expected: the image still boots the unified service, still creates the DB parent
 Run:
 
 ```bash
-git diff -- awardwiz/backend/award-alerts/Dockerfile
+git diff -- awardsearch/backend/award-alerts/Dockerfile
 ```
 
 Expected: the diff only reflects the new Playwright image choice, any required Chromium path update, and comment changes that explain the multi-arch intent.
@@ -91,7 +91,7 @@ Expected: the diff only reflects the new Playwright image choice, any required C
 Run:
 
 ```bash
-git add awardwiz/backend/award-alerts/Dockerfile
+git add awardsearch/backend/award-alerts/Dockerfile
 git commit -m "Update award alerts Docker base image for ARM64"
 ```
 
@@ -100,23 +100,23 @@ Expected: one focused commit containing only the Dockerfile runtime change.
 ## Task 2: Update Operations and Handoff Documentation
 
 **Files:**
-- Modify: `docs/award-alerts-operations.md`
-- Modify: `docs/award-alerts-backend-handoff.md`
+- Modify: `docs/operations/award-alerts-operations.md`
+- Modify: `docs/product/award-alerts-backend-handoff.md`
 - Modify: `README.md`
 
 - [ ] **Step 1: Add explicit architecture support to the operations doc**
 
-In `docs/award-alerts-operations.md`, add a Docker section that includes commands in this shape:
+In `docs/operations/award-alerts-operations.md`, add a Docker section that includes commands in this shape:
 
 ```bash
 docker buildx build \
   --platform linux/amd64 \
-  -f awardwiz/backend/award-alerts/Dockerfile \
+  -f awardsearch/backend/award-alerts/Dockerfile \
   -t award-alerts:amd64 .
 
 docker buildx build \
   --platform linux/arm64 \
-  -f awardwiz/backend/award-alerts/Dockerfile \
+  -f awardsearch/backend/award-alerts/Dockerfile \
   -t award-alerts:arm64 .
 ```
 
@@ -144,7 +144,7 @@ docker run --rm \
 
 - [ ] **Step 2: Update the handoff doc to record the supported deployment target**
 
-In `docs/award-alerts-backend-handoff.md`, add or update the current-runtime section so it states all of the following plainly:
+In `docs/product/award-alerts-backend-handoff.md`, add or update the current-runtime section so it states all of the following plainly:
 
 - production is container-only
 - the container keeps Chromium bundled inside the image
@@ -159,7 +159,7 @@ In `README.md`, keep the update short. The relevant runtime summary should say, 
 
 ```md
 Production uses the `award-alerts` container runtime. Build the image from
-`awardwiz/backend/award-alerts/Dockerfile`, mount persistent SQLite storage,
+`awardsearch/backend/award-alerts/Dockerfile`, mount persistent SQLite storage,
 configure `DISCORD_WEBHOOK_URL`, and expose the service on port `2233`.
 The intended container targets are `linux/amd64` and `linux/arm64`.
 ```
@@ -171,7 +171,7 @@ Expected: the README reinforces the container-only path without duplicating the 
 Run:
 
 ```bash
-rg -n "systemd|host deployment|v1\\.32\\.0|amd64|arm64" README.md docs/award-alerts-operations.md docs/award-alerts-backend-handoff.md awardwiz/backend/award-alerts/Dockerfile
+rg -n "systemd|host deployment|v1\\.32\\.0|amd64|arm64" README.md docs/operations/award-alerts-operations.md docs/product/award-alerts-backend-handoff.md awardsearch/backend/award-alerts/Dockerfile
 ```
 
 Expected:
@@ -184,7 +184,7 @@ Expected:
 Run:
 
 ```bash
-git add README.md docs/award-alerts-operations.md docs/award-alerts-backend-handoff.md
+git add README.md docs/operations/award-alerts-operations.md docs/product/award-alerts-backend-handoff.md
 git commit -m "Document multi-arch award alerts container runtime"
 ```
 
@@ -193,8 +193,8 @@ Expected: one focused docs commit covering the deployment contract update.
 ## Task 3: Repo-Side Verification and Operator Handoff
 
 **Files:**
-- Modify: `docs/award-alerts-operations.md` if verification wording needs adjustment
-- Modify: `docs/award-alerts-backend-handoff.md` if verification wording needs adjustment
+- Modify: `docs/operations/award-alerts-operations.md` if verification wording needs adjustment
+- Modify: `docs/product/award-alerts-backend-handoff.md` if verification wording needs adjustment
 
 - [ ] **Step 1: Run the repo-side verification suite after the Docker and doc changes**
 
@@ -213,7 +213,7 @@ Expected:
 
 - [ ] **Step 2: Record the Docker-capable machine validation commands exactly**
 
-Ensure `docs/award-alerts-operations.md` includes the operator follow-up commands in this shape:
+Ensure `docs/operations/award-alerts-operations.md` includes the operator follow-up commands in this shape:
 
 ```bash
 curl http://localhost:2233/health
@@ -234,7 +234,7 @@ Run:
 
 ```bash
 git diff --stat HEAD~2..HEAD
-git diff -- awardwiz/backend/award-alerts/Dockerfile README.md docs/award-alerts-operations.md docs/award-alerts-backend-handoff.md
+git diff -- awardsearch/backend/award-alerts/Dockerfile README.md docs/operations/award-alerts-operations.md docs/product/award-alerts-backend-handoff.md
 ```
 
 Expected: the final scope is limited to the Dockerfile and the three runtime docs.
@@ -244,7 +244,7 @@ Expected: the final scope is limited to the Dockerfile and the three runtime doc
 If Step 2 or Step 3 required small wording corrections, commit them with:
 
 ```bash
-git add docs/award-alerts-operations.md docs/award-alerts-backend-handoff.md
+git add docs/operations/award-alerts-operations.md docs/product/award-alerts-backend-handoff.md
 git commit -m "Polish ARM64 container verification guidance"
 ```
 
